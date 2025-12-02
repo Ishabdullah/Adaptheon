@@ -1,24 +1,38 @@
 from dataclasses import dataclass
-from typing import List
+from typing import Optional
 from enum import Enum
+import abc
+import time
 
 class FetchSource(Enum):
+    """Identifies where information came from"""
     CACHE = "cache"
     LOCAL_RSS = "local_rss"
-    PERPLEXITY_API = "perplexity_api"
-    FALLBACK = "fallback"
-
-@dataclass
-class Citation:
-    title: str
-    url: str
-    relevance: float  # 0.0-1.0
+    WEB_SCRAPE = "web_scrape"
+    WIKIPEDIA = "wikipedia"
 
 @dataclass
 class FetchResult:
-    answer: str
-    citations: List[Citation]
-    raw_data: str
+    """Standardized container for fetched information"""
+    query: str
+    summary: str
     source: FetchSource
-    fetch_time: int  # milliseconds
-    is_stale: bool = False
+    confidence: float  # 0.0 to 1.0
+    url: Optional[str] = None
+    timestamp: float = 0.0
+    
+    def __post_init__(self):
+        if self.timestamp == 0.0:
+            self.timestamp = time.time()
+
+class BaseFetcher(abc.ABC):
+    """Abstract base for all fetcher implementations"""
+    
+    @abc.abstractmethod
+    def fetch(self, query: str) -> Optional[FetchResult]:
+        """Attempt to fetch information for the given query"""
+        pass
+    
+    def is_available(self) -> bool:
+        """Check if this fetcher can currently operate"""
+        return True

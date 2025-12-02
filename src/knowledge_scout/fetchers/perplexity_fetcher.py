@@ -7,7 +7,7 @@ class PerplexityFetcher:
     def __init__(self):
         self.api_key = os.environ.get('PERPLEXITY_API_KEY')
         self.enabled = self.api_key is not None
-        
+
     def fetch(self, query):
         if not self.enabled:
             print("    [Perplexity] API key not set, skipping")

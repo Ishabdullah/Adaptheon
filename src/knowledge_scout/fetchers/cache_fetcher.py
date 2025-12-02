@@ -1,63 +1,59 @@
 import json
 import os
 import time
-from datetime import datetime, timedelta
-from .base import FetchResult, FetchSource, Citation
+from typing import Optional
+from .base import BaseFetcher, FetchResult, FetchSource
 
-class CacheFetcher:
-    def __init__(self, cache_dir="data/cache", ttl_hours=24):
-        self.cache_dir = cache_dir
-        self.ttl_hours = ttl_hours
-        os.makedirs(cache_dir, exist_ok=True)
-        
-    def _get_cache_path(self, query):
-        # Simple hash for filename
-        cache_key = str(abs(hash(query.lower().strip())))
-        return os.path.join(self.cache_dir, f"{cache_key}.json")
+class CacheFetcher(BaseFetcher):
+    """
+    First line of defense: check if we already know this.
+    Prevents redundant network calls and speeds up responses.
+    """
+    def __init__(self, cache_path="data/cache/knowledge_cache.json"):
+        self.cache_path = cache_path
+        self.cache = self._load_cache()
     
-    def fetch(self, query):
-        cache_path = self._get_cache_path(query)
+    def _load_cache(self):
+        if os.path.exists(self.cache_path):
+            try:
+                with open(self.cache_path, 'r') as f:
+                    return json.load(f)
+            except json.JSONDecodeError:
+                print("    [Cache] Warning: corrupted cache, rebuilding...")
+                return {}
+        return {}
+    
+    def _save_cache(self):
+        os.makedirs(os.path.dirname(self.cache_path), exist_ok=True)
+        with open(self.cache_path, 'w') as f:
+            json.dump(self.cache, f, indent=2)
+    
+    def fetch(self, query: str) -> Optional[FetchResult]:
+        key = query.lower().strip()
         
-        if not os.path.exists(cache_path):
-            return None
-            
-        try:
-            with open(cache_path, 'r') as f:
-                cached = json.load(f)
-            
-            # Check TTL
-            cached_time = datetime.fromisoformat(cached['timestamp'])
-            if datetime.now() - cached_time > timedelta(hours=self.ttl_hours):
-                print(f"    [Cache] Entry stale, TTL expired")
-                return None
-            
-            print(f"    [Cache] HIT! Returning cached result (age: {datetime.now() - cached_time})")
-            
+        if key in self.cache:
+            cached = self.cache[key]
+            print(f"    [Cache] ✓ Hit: '{query}'")
             return FetchResult(
-                answer=cached['answer'],
-                citations=[Citation(**c) for c in cached['citations']],
-                raw_data=cached.get('raw_data', ''),
+                query=query,
+                summary=cached['summary'],
                 source=FetchSource.CACHE,
-                fetch_time=5,
-                is_stale=False
+                confidence=cached.get('confidence', 0.95),
+                url=cached.get('url'),
+                timestamp=cached.get('timestamp', 0)
             )
-        except Exception as e:
-            print(f"    [Cache] Error reading cache: {e}")
-            return None
+        
+        print(f"    [Cache] ✗ Miss: '{query}'")
+        return None
     
-    def store(self, query, result):
-        """Store a fetch result in cache"""
-        cache_path = self._get_cache_path(query)
-        
-        cache_data = {
-            'query': query,
-            'timestamp': datetime.now().isoformat(),
-            'answer': result.answer,
-            'citations': [{'title': c.title, 'url': c.url, 'relevance': c.relevance} 
-                         for c in result.citations],
-            'raw_data': result.raw_data,
-            'source': result.source.value
+    def store(self, result: FetchResult):
+        """Save a new fact to cache"""
+        key = result.query.lower().strip()
+        self.cache[key] = {
+            'summary': result.summary,
+            'confidence': result.confidence,
+            'url': result.url,
+            'timestamp': result.timestamp
         }
-        
-        with open(cache_path, 'w') as f:
-            json.dump(cache_data, f, indent=2)
+        self._save_cache()
+        print(f"    [Cache] Stored: '{result.query}'")

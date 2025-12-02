@@ -1,34 +1,52 @@
 import time
-import random
+from knowledge_scout.fetchers.cache_fetcher import CacheFetcher
+from knowledge_scout.fetchers.rss_fetcher import RSSFetcher
+from knowledge_scout.fetchers.wikipedia_fetcher import WikipediaFetcher
 
 class KnowledgeScout:
     """
-    The Forager.
-    Runs only when triggered by the Meta-Core.
-    Fetches information to update Semantic Memory.
+    Phase 1.5: Multi-layer information retrieval system.
+    Tries: Cache → Wikipedia → RSS in order of reliability.
     """
     def __init__(self):
-        self.common_knowledge = {
-            "samsung": "A massive South Korean multinational electronics corporation.",
-            "google": "An American multinational technology company focusing on AI and search.",
-            "neuro-symbolic": "A hybrid AI architecture combining neural networks (learning) with symbolic logic (reasoning)."
+        print("  [Scout] Initializing fetcher layers...")
+        self.cache = CacheFetcher()
+        self.wikipedia = WikipediaFetcher()
+        self.rss = RSSFetcher()
+        
+        # Ordered by speed and reliability
+        self.fetchers = [
+            self.cache,
+            self.wikipedia,
+            self.rss
+        ]
+    
+    def search(self, query: str):
+        """
+        Waterfall search: try each fetcher until one succeeds.
+        """
+        print(f"    [Scout] Deploying agents for: '{query}'...")
+        
+        for fetcher in self.fetchers:
+            result = fetcher.fetch(query)
+            
+            if result:
+                # Cache network results for future use
+                if result.source != "cache":
+                    self.cache.store(result)
+                
+                return {
+                    "status": "FOUND",
+                    "summary": result.summary,
+                    "source": result.source.value,
+                    "confidence": result.confidence,
+                    "url": result.url
+                }
+        
+        # All fetchers failed
+        return {
+            "status": "NOT_FOUND",
+            "summary": f"I couldn't find reliable information about '{query}'.",
+            "source": "none",
+            "confidence": 0.0
         }
-
-    def search(self, query):
-        print(f"    [Scout] Deploying search agents for: '{query}'...")
-        time.sleep(1) # Simulate network latency
-        
-        # MVP: Simulation of a search hit
-        query_key = query.lower().split()[0] # Naive key extraction
-        
-        result = self.common_knowledge.get(query_key)
-        
-        if result:
-            return {"status": "FOUND", "summary": result, "source": "Internal_Cache"}
-        else:
-            # Simulation of finding something new
-            return {
-                "status": "FOUND", 
-                "summary": f"External data found regarding {query}. It is a complex topic requiring further analysis.",
-                "source": "Simulated_Web_Index"
-            }

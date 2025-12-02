@@ -8,10 +8,9 @@ class FetcherChain:
         self.cache = CacheFetcher()
         self.rss = RSSFetcher()
         self.perplexity = PerplexityFetcher()
-        
+
     def fetch(self, query):
-        print(f"
-  [Fetcher Chain] Initiating fetch sequence...")
+        print(f"\n[Fetcher Chain] Initiating fetch sequence...")
         
         # Try cache first (fastest)
         result = self.cache.fetch(query)
