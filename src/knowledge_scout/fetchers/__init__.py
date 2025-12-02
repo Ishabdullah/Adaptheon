@@ -1,4 +1,3 @@
 """
-Fetcher abstraction layer.
-Each fetcher implements: fetch(query) -> FetchResult
+Fetcher implementations for Knowledge Scout (cache, RSS, Wikipedia, etc.).
 """

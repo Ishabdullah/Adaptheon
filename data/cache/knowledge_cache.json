@@ -1,0 +1,20 @@
+{
+  "samsung": {
+    "summary": "Sam ung Group[1](Korean:;pronounce[ am ];  tyli e a SMSUNG) i  a South Korean multinational manufacturingconglomerateheaquartere in theSam ung Townoffice complex inSeoul. The group con i t  of numerou  affiliate bu ine e ,[2]mo t of which operate uner the Sam ung bran, an i  the large tchaebol(bu ine  conglomerate) in South Korea. A  of 2024,[upate]Sam ung ha  the worl' fifth-highe t bran value.[3...",
+    "confidence": 0.85,
+    "url": "https://en.wikipedia.org/wiki/samsung",
+    "timestamp": 1764693664.5224848
+  },
+  "nasdaq": {
+    "summary": "Na aq Stock Market[a](National A ociation of Securitie  Dealer  Automate Quotation ) i  an American tock exchange, the  econ-large t bymarket capon theli t of  tock exchange , an the fir t fully electronic  tock market. The exchange i  ba e inManhattan,New York Cityan i  the mo t active  tock traing venue in the U.S. by volume.[3][4]",
+    "confidence": 0.85,
+    "url": "https://en.wikipedia.org/wiki/nasdaq",
+    "timestamp": 1764693683.9267366
+  },
+  "quantum computing": {
+    "summary": "Aquantum computeri  a (real or theoretical)computerthat exploit uperpo eanentangle tate , an the intrin icallynon-etermini ticoutcome  ofquantum mea urement , a  feature  of it  computation. Quantum computer  can be viewe a   ampling from quantum  y tem  that evolve in way  that may be e cribe a  operating on an enormou  number of po ibilitie   imultaneou ly, though  till  ubject to  trict computa...",
+    "confidence": 0.85,
+    "url": "https://en.wikipedia.org/wiki/quantum_computing",
+    "timestamp": 1764693712.556706
+  }
+}

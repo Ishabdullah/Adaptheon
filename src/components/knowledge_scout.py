@@ -2,11 +2,12 @@ import time
 from knowledge_scout.fetchers.cache_fetcher import CacheFetcher
 from knowledge_scout.fetchers.rss_fetcher import RSSFetcher
 from knowledge_scout.fetchers.wikipedia_fetcher import WikipediaFetcher
+from knowledge_scout.fetchers.base import FetchSource
 
 class KnowledgeScout:
     """
     Phase 1.5: Multi-layer information retrieval system.
-    Tries: Cache → Wikipedia → RSS in order of reliability.
+    Order: Cache → Wikipedia → RSS.
     """
     def __init__(self):
         print("  [Scout] Initializing fetcher layers...")
@@ -24,15 +25,16 @@ class KnowledgeScout:
     def search(self, query: str):
         """
         Waterfall search: try each fetcher until one succeeds.
+        Returns a simple dict for the Meta-Core.
         """
-        print(f"    [Scout] Deploying agents for: '{query}'...")
+        print("    [Scout] Deploying agents for: '{}'...".format(query))
         
         for fetcher in self.fetchers:
             result = fetcher.fetch(query)
             
             if result:
-                # Cache network results for future use
-                if result.source != "cache":
+                # Cache everything except cache hits themselves
+                if result.source is not FetchSource.CACHE:
                     self.cache.store(result)
                 
                 return {
@@ -40,13 +42,14 @@ class KnowledgeScout:
                     "summary": result.summary,
                     "source": result.source.value,
                     "confidence": result.confidence,
-                    "url": result.url
+                    "url": result.url,
                 }
         
         # All fetchers failed
         return {
             "status": "NOT_FOUND",
-            "summary": f"I couldn't find reliable information about '{query}'.",
+            "summary": "I couldn't find reliable information about '{}'.".format(query),
             "source": "none",
-            "confidence": 0.0
+            "confidence": 0.0,
+            "url": None,
         }

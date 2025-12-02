@@ -1,83 +1,70 @@
 {
     "episodic": [
         {
-            "timestamp": "2025-12-02 07:41:00.121691",
+            "timestamp": "2025-12-02 11:40:55.802363",
             "input": "System Check",
-            "response": "[LLM Simulation] Processed: System Check"
+            "response": "[LLM Simulation] System Check"
         },
         {
-            "timestamp": "2025-12-02 07:41:39.425764",
-            "input": "Remember I am building a neuro-symbolic AI.",
-            "response": "I've etched that into my semantic memory."
+            "timestamp": "2025-12-02 11:41:04.523899",
+            "input": "what is samsung",
+            "response": "Here is a concise explanation of 'samsung', based on wikipedia: Sam ung Group[1](Korean:;pronounce[ am ];  tyli e a SMSUNG) i  a South Korean multinational manufacturingconglomerateheaquartere in theSam ung Townoffice complex inSeoul. The group con i t  of numerou  affiliate bu ine e ,[2]mo t of which operate uner the Sam ung bran, an i  the large tchaebol(bu ine  conglomerate) in South Korea. A  of 2024,[upate]Sam ung ha  the worl' fifth-highe t bran value.[3..."
         },
         {
-            "timestamp": "2025-12-02 07:42:04.067508",
-            "input": "Who am I?",
-            "response": "Consulting graph... I know this about you: {'user_fact': 'i am building a neuro-symbolic ai.'}"
+            "timestamp": "2025-12-02 11:41:23.927988",
+            "input": "what is nasdaq",
+            "response": "Here is a concise explanation of 'nasdaq', based on wikipedia: Na aq Stock Market[a](National A ociation of Securitie  Dealer  Automate Quotation ) i  an American tock exchange, the  econ-large t bymarket capon theli t of  tock exchange , an the fir t fully electronic  tock market. The exchange i  ba e inManhattan,New York Cityan i  the mo t active  tock traing venue in the U.S. by volume.[3][4]"
         },
         {
-            "timestamp": "2025-12-02 07:42:29.254495",
-            "input": "Create a plan to launch this.",
-            "response": "I have constructed a logic chain for this.\nSteps: ['1. Analyze constraint parameters.', '2. Query Knowledge Scout for missing vars.', '3. Optimize execution path.']"
+            "timestamp": "2025-12-02 11:41:52.558259",
+            "input": "what is quantum computing",
+            "response": "Here is a concise explanation of 'quantum computing', based on wikipedia: Aquantum computeri  a (real or theoretical)computerthat exploit uperpo eanentangle tate , an the intrin icallynon-etermini ticoutcome  ofquantum mea urement , a  feature  of it  computation. Quantum computer  can be viewe a   ampling from quantum  y tem  that evolve in way  that may be e cribe a  operating on an enormou  number of po ibilitie   imultaneou ly, though  till  ubject to  trict computa..."
         },
         {
-            "timestamp": "2025-12-02 07:50:46.020442",
-            "input": "System Check",
-            "response": "[LLM Simulation] Processed: System Check"
-        },
-        {
-            "timestamp": "2025-12-02 07:51:10.891492",
-            "input": "What is Samsung",
-            "response": "Scout returned: A massive South Korean multinational electronics corporation. (Source: Internal_Cache)"
-        },
-        {
-            "timestamp": "2025-12-02 07:53:02.684084",
-            "input": "Who am I?",
-            "response": "Consulting graph... I know this about you: {'user_fact': 'i am building a neuro-symbolic ai.', 'knowledge_samsung': 'A massive South Korean multinational electronics corporation.'}"
-        },
-        {
-            "timestamp": "2025-12-02 07:53:42.344574",
-            "input": "who is the president of the united states",
-            "response": "[LLM Simulation] Processed: who is the president of the united states"
-        },
-        {
-            "timestamp": "2025-12-02 07:54:27.255850",
-            "input": "ask knowledge scout who is the president of the united states",
-            "response": "[LLM Simulation] Processed: ask knowledge scout who is the president of the united states"
-        },
-        {
-            "timestamp": "2025-12-02 07:55:10.617797",
-            "input": "Remember I am Ish your God",
-            "response": "I've etched that into my semantic memory."
-        },
-        {
-            "timestamp": "2025-12-02 07:55:18.363490",
-            "input": "who am i",
-            "response": "Consulting graph... I know this about you: {'user_fact': 'i am ish your god', 'knowledge_samsung': 'A massive South Korean multinational electronics corporation.'}"
-        },
-        {
-            "timestamp": "2025-12-02 07:56:03.507971",
-            "input": "what is Apple?",
-            "response": "Scout returned: External data found regarding apple?. It is a complex topic requiring further analysis. (Source: Simulated_Web_Index)"
-        },
-        {
-            "timestamp": "2025-12-02 07:56:30.571422",
-            "input": "Who is Donald Trump?",
-            "response": "[LLM Simulation] Processed: Who is Donald Trump?"
-        },
-        {
-            "timestamp": "2025-12-02 07:56:50.234421",
-            "input": "What is America?",
-            "response": "Scout returned: External data found regarding america?. It is a complex topic requiring further analysis. (Source: Simulated_Web_Index)"
+            "timestamp": "2025-12-02 11:42:17.250045",
+            "input": "what is samsung",
+            "response": "Here is a concise explanation of 'samsung', based on wikipedia: Sam ung Group[1](Korean:;pronounce[ am ];  tyli e a SMSUNG) i  a South Korean multinational manufacturingconglomerateheaquartere in theSam ung Townoffice complex inSeoul. The group con i t  of numerou  affiliate bu ine e ,[2]mo t of which operate uner the Sam ung bran, an i  the large tchaebol(bu ine  conglomerate) in South Korea. A  of 2024,[upate]Sam ung ha  the worl' fifth-highe t bran value.[3... You might also ask about: nasdaq, quantum computing."
         }
     ],
-    "semantic": {},
-    "procedural": [],
-    "preference": {
-        "user_fact": "i am ish your god",
-        "knowledge_samsung": "A massive South Korean multinational electronics corporation.",
-        "knowledge_apple?": "External data found regarding apple?. It is a complex topic requiring further analysis.",
-        "knowledge_america?": "External data found regarding america?. It is a complex topic requiring further analysis."
+    "semantic": {
+        "knowledge_samsung": {
+            "summary": "Sam ung Group[1](Korean:;pronounce[ am ];  tyli e a SMSUNG) i  a South Korean multinational manufacturingconglomerateheaquartere in theSam ung Townoffice complex inSeoul. The group con i t  of numerou  affiliate bu ine e ,[2]mo t of which operate uner the Sam ung bran, an i  the large tchaebol(bu ine  conglomerate) in South Korea. A  of 2024,[upate]Sam ung ha  the worl' fifth-highe t bran value.[3...",
+            "metadata": {
+                "source": "wikipedia",
+                "confidence": 0.85,
+                "url": "https://en.wikipedia.org/wiki/samsung"
+            },
+            "timestamp": "2025-12-02 11:41:04.523777",
+            "vector": {
+                "w": 3
+            }
+        },
+        "knowledge_nasdaq": {
+            "summary": "Na aq Stock Market[a](National A ociation of Securitie  Dealer  Automate Quotation ) i  an American tock exchange, the  econ-large t bymarket capon theli t of  tock exchange , an the fir t fully electronic  tock market. The exchange i  ba e inManhattan,New York Cityan i  the mo t active  tock traing venue in the U.S. by volume.[3][4]",
+            "metadata": {
+                "source": "wikipedia",
+                "confidence": 0.85,
+                "url": "https://en.wikipedia.org/wiki/nasdaq"
+            },
+            "timestamp": "2025-12-02 11:41:23.927872",
+            "vector": {
+                "w": 1
+            }
+        },
+        "knowledge_quantum_computing": {
+            "summary": "Aquantum computeri  a (real or theoretical)computerthat exploit uperpo eanentangle tate , an the intrin icallynon-etermini ticoutcome  ofquantum mea urement , a  feature  of it  computation. Quantum computer  can be viewe a   ampling from quantum  y tem  that evolve in way  that may be e cribe a  operating on an enormou  number of po ibilitie   imultaneou ly, though  till  ubject to  trict computa...",
+            "metadata": {
+                "source": "wikipedia",
+                "confidence": 0.85,
+                "url": "https://en.wikipedia.org/wiki/quantum_computing"
+            },
+            "timestamp": "2025-12-02 11:41:52.558122",
+            "vector": {
+                "w": 2
+            }
+        }
     },
+    "procedural": [],
+    "preference": {},
     "graph_context": []
 }
