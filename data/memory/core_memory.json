@@ -1,0 +1,30 @@
+{
+    "episodic": [
+        {
+            "timestamp": "2025-12-02 07:41:00.121691",
+            "input": "System Check",
+            "response": "[LLM Simulation] Processed: System Check"
+        },
+        {
+            "timestamp": "2025-12-02 07:41:39.425764",
+            "input": "Remember I am building a neuro-symbolic AI.",
+            "response": "I've etched that into my semantic memory."
+        },
+        {
+            "timestamp": "2025-12-02 07:42:04.067508",
+            "input": "Who am I?",
+            "response": "Consulting graph... I know this about you: {'user_fact': 'i am building a neuro-symbolic ai.'}"
+        },
+        {
+            "timestamp": "2025-12-02 07:42:29.254495",
+            "input": "Create a plan to launch this.",
+            "response": "I have constructed a logic chain for this.\nSteps: ['1. Analyze constraint parameters.', '2. Query Knowledge Scout for missing vars.', '3. Optimize execution path.']"
+        }
+    ],
+    "semantic": {},
+    "procedural": [],
+    "preference": {
+        "user_fact": "i am building a neuro-symbolic ai."
+    },
+    "graph_context": []
+}
