@@ -2,45 +2,60 @@ import time
 
 class HierarchicalReasoningMachine:
     """
-    The Logic Cortex.
-    Receives structured data, performs logic/planning, returns structure.
-    Does not 'talk', it 'thinks'.
+    The Logic Cortex (Phase 1 Upgraded).
+    Now capable of identifying 'Unknowns' and requesting Research.
     """
     def __init__(self):
         pass
 
     def process(self, intent_data, memory_context):
-        """
-        The core thinking loop.
-        """
-        print(f"  [HRM] Analyzing Intent: {intent_data['type']}")
+        intent_type = intent_data["type"]
+        print(f"  [HRM] Analyzing Intent: {intent_type}")
         
-        if intent_data["type"] == "PLANNING":
+        # 1. PLANNING
+        if intent_type == "PLANNING":
             return self._generate_plan(intent_data["content"])
         
-        elif intent_data["type"] == "MEMORY_WRITE":
-            # Logic: Extract the fact to be saved
+        # 2. MEMORY WRITE
+        elif intent_type == "MEMORY_WRITE":
             fact = intent_data["content"].replace("remember", "").strip()
-            return {"action": "SAVE_PREFERENCE", "key": "user_fact", "value": fact, "response": "I've etched that into my semantic memory."}
+            return {
+                "action": "SAVE_PREFERENCE", 
+                "key": "user_fact", 
+                "value": fact, 
+                "response": "I've etched that into my semantic memory."
+            }
         
-        elif intent_data["type"] == "MEMORY_READ":
+        # 3. MEMORY READ
+        elif intent_type == "MEMORY_READ":
             prefs = memory_context.get("user_preferences", {})
-            return {"action": "RETRIEVE", "data": prefs, "response": f"Consulting graph... I know this about you: {prefs}"}
+            return {
+                "action": "RETRIEVE", 
+                "data": prefs, 
+                "response": f"Consulting graph... I know this about you: {prefs}"
+            }
+
+        # 4. RESEARCH / LEARNING (New)
+        elif "what is" in intent_data["content"] or "define" in intent_data["content"]:
+            # Logic: If I don't have it in memory, I must scout.
+            topic = intent_data["content"].replace("what is", "").replace("define", "").strip()
+            return {
+                "action": "TRIGGER_SCOUT",
+                "topic": topic,
+                "response": "I do not have this in local memory. Deploying Knowledge Scout."
+            }
             
+        # 5. DEFAULT CONVERSATION
         else:
             return {"action": "CONVERSE", "response": "Processing via standard conversational loop."}
 
     def _generate_plan(self, content):
-        """
-        Symbolic logic for breaking down tasks.
-        """
         steps = [
             "1. Analyze constraint parameters.",
             "2. Query Knowledge Scout for missing vars.",
             "3. Optimize execution path."
         ]
-        print("  [HRM] Decomposing task...")
-        time.sleep(0.5) # Simulate compute
+        time.sleep(0.5) 
         return {
             "action": "EXECUTE_PLAN", 
             "plan_steps": steps, 
