@@ -19,12 +19,65 @@
             "timestamp": "2025-12-02 07:42:29.254495",
             "input": "Create a plan to launch this.",
             "response": "I have constructed a logic chain for this.\nSteps: ['1. Analyze constraint parameters.', '2. Query Knowledge Scout for missing vars.', '3. Optimize execution path.']"
+        },
+        {
+            "timestamp": "2025-12-02 07:50:46.020442",
+            "input": "System Check",
+            "response": "[LLM Simulation] Processed: System Check"
+        },
+        {
+            "timestamp": "2025-12-02 07:51:10.891492",
+            "input": "What is Samsung",
+            "response": "Scout returned: A massive South Korean multinational electronics corporation. (Source: Internal_Cache)"
+        },
+        {
+            "timestamp": "2025-12-02 07:53:02.684084",
+            "input": "Who am I?",
+            "response": "Consulting graph... I know this about you: {'user_fact': 'i am building a neuro-symbolic ai.', 'knowledge_samsung': 'A massive South Korean multinational electronics corporation.'}"
+        },
+        {
+            "timestamp": "2025-12-02 07:53:42.344574",
+            "input": "who is the president of the united states",
+            "response": "[LLM Simulation] Processed: who is the president of the united states"
+        },
+        {
+            "timestamp": "2025-12-02 07:54:27.255850",
+            "input": "ask knowledge scout who is the president of the united states",
+            "response": "[LLM Simulation] Processed: ask knowledge scout who is the president of the united states"
+        },
+        {
+            "timestamp": "2025-12-02 07:55:10.617797",
+            "input": "Remember I am Ish your God",
+            "response": "I've etched that into my semantic memory."
+        },
+        {
+            "timestamp": "2025-12-02 07:55:18.363490",
+            "input": "who am i",
+            "response": "Consulting graph... I know this about you: {'user_fact': 'i am ish your god', 'knowledge_samsung': 'A massive South Korean multinational electronics corporation.'}"
+        },
+        {
+            "timestamp": "2025-12-02 07:56:03.507971",
+            "input": "what is Apple?",
+            "response": "Scout returned: External data found regarding apple?. It is a complex topic requiring further analysis. (Source: Simulated_Web_Index)"
+        },
+        {
+            "timestamp": "2025-12-02 07:56:30.571422",
+            "input": "Who is Donald Trump?",
+            "response": "[LLM Simulation] Processed: Who is Donald Trump?"
+        },
+        {
+            "timestamp": "2025-12-02 07:56:50.234421",
+            "input": "What is America?",
+            "response": "Scout returned: External data found regarding america?. It is a complex topic requiring further analysis. (Source: Simulated_Web_Index)"
         }
     ],
     "semantic": {},
     "procedural": [],
     "preference": {
-        "user_fact": "i am building a neuro-symbolic ai."
+        "user_fact": "i am ish your god",
+        "knowledge_samsung": "A massive South Korean multinational electronics corporation.",
+        "knowledge_apple?": "External data found regarding apple?. It is a complex topic requiring further analysis.",
+        "knowledge_america?": "External data found regarding america?. It is a complex topic requiring further analysis."
     },
     "graph_context": []
 }
