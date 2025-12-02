@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+data/memory/core_memory.json
+data/cache/knowledge_cache.json
+models/
+.env
