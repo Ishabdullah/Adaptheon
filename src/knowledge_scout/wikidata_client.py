@@ -7,7 +7,6 @@ from .truth_types import TruthResult, SourceTier, SourceKind, SourceTraceEntry
 class WikidataClient:
     """
     Primary structured source for entity facts via Wikidata SPARQL endpoint.
-    Uses SPARQLWrapper as recommended in Wikidata Python examples.
     """
 
     def __init__(self):
@@ -23,10 +22,15 @@ class WikidataClient:
         except Exception:
             return None
 
+    def _sanitize_label(self, label: str) -> str:
+        # Basic sanitization: replace double quotes to avoid literal breakage
+        return label.replace('"', "'")
+
     def _entity_search(self, label: str, limit: int = 1) -> Optional[str]:
+        safe_label = self._sanitize_label(label)
         q = (
             "SELECT ?item WHERE { "
-            "?item rdfs:label "" + label.replace('"', '\\"') + ""@en . "
+            '?item rdfs:label "' + safe_label + '"@en . '
             "} LIMIT " + str(limit)
         )
         data = self._run_sparql(q)
@@ -42,8 +46,8 @@ class WikidataClient:
         q = (
             "SELECT ?label ?desc WHERE { "
             "<" + entity_iri + "> rdfs:label ?label . "
-            "FILTER (lang(?label) = "en") "
-            "OPTIONAL { <" + entity_iri + "> schema:description ?desc . FILTER (lang(?desc) = "en") } "
+            'FILTER (lang(?label) = "en") '
+            "OPTIONAL { <" + entity_iri + '> schema:description ?desc . FILTER (lang(?desc) = "en") } '
             "} LIMIT 1"
         )
         data = self._run_sparql(q)
@@ -60,10 +64,6 @@ class WikidataClient:
         return label
 
     def lookup_entity(self, query: str) -> Optional[TruthResult]:
-        """
-        Try to resolve a general entity (person, organization, place, etc.)
-        into a canonical summary using Wikidata.
-        """
         entity_iri = self._entity_search(query)
         if not entity_iri:
             return None
@@ -79,7 +79,7 @@ class WikidataClient:
                 name="Wikidata",
                 url=entity_iri,
                 confidence=0.85,
-                note="Entity label and description from Wikidata"
+                note="Entity label and description from Wikidata",
             )
         ]
 
