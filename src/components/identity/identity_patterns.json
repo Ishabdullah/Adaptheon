@@ -1,0 +1,64 @@
+[
+  {
+    "id": "who_are_you",
+    "canonical_question": "Who are you?",
+    "patterns": [
+      "who are you",
+      "what are you",
+      "who is adaptheon",
+      "what exactly are you",
+      "what's your deal",
+      "what is your role",
+      "who am i talking to",
+      "who am i speaking with"
+    ]
+  },
+  {
+    "id": "what_is_your_purpose",
+    "canonical_question": "What is your purpose?",
+    "patterns": [
+      "what is your purpose",
+      "why do you exist",
+      "what are you for",
+      "what do you exist for",
+      "what is your main goal",
+      "why were you created"
+    ]
+  },
+  {
+    "id": "how_do_you_work",
+    "canonical_question": "How do you work?",
+    "patterns": [
+      "how do you work",
+      "how do you function",
+      "how do you operate",
+      "how do you run",
+      "how do you actually work",
+      "how do you process questions"
+    ]
+  },
+  {
+    "id": "what_are_your_limitations",
+    "canonical_question": "What are your limitations?",
+    "patterns": [
+      "what are your limitations",
+      "what can't you do",
+      "what cant you do",
+      "what are you bad at",
+      "what are your weaknesses",
+      "what are your limits"
+    ]
+  },
+  {
+    "id": "where_does_knowledge_come_from",
+    "canonical_question": "Where does your knowledge come from?",
+    "patterns": [
+      "where does your knowledge come from",
+      "where do you get your information",
+      "what are your data sources",
+      "where do you learn from",
+      "what do you read",
+      "what sources do you use"
+    ]
+  }
+]
