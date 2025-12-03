@@ -40,15 +40,13 @@ class HierarchicalReasoningMachine:
         Rough domain/query_type classifier used to hint DomainRouter.
         Returns (domain, query_type) or (None, None).
         """
-        # Sports
+
+        # Sports – only treat explicit score/result questions as sports_result.
         if ("who won" in text_lower
             or "final score" in text_lower
             or "score of" in text_lower
-            or "giants" in text_lower
-            or "nfl" in text_lower
-            or "nba" in text_lower
-            or "mlb" in text_lower
-            or "premier league" in text_lower):
+            or "who beat" in text_lower
+            or "who did" in text_lower and "beat" in text_lower):
             return "sports", "sports_result"
 
         # Weather
@@ -95,25 +93,27 @@ class HierarchicalReasoningMachine:
         if ("book" in text_lower
             or "novel" in text_lower
             or "isbn" in text_lower
-            or "author" in text_lower and "book" in text_lower):
+            or ("author" in text_lower and "book" in text_lower)):
             return "books_literature", "book_info"
 
         # Music
         if ("song" in text_lower
             or "track" in text_lower
             or "album" in text_lower
-            or "artist" in text_lower and "music" in text_lower):
+            or ("artist" in text_lower and "music" in text_lower)):
             return "music", "music_info"
 
         # Transportation
         if ("flight" in text_lower
             or "airport" in text_lower
             or "airline" in text_lower
-            or "arrival" in text_lower and "flight" in text_lower):
+            or ("arrival" in text_lower and "flight" in text_lower)):
             return "transportation", "flight_status"
 
         # AI / tech
-        if ("model" in text_lower and "ai" in text_lower) or "huggingface" in text_lower or "github" in text_lower:
+        if (("model" in text_lower and "ai" in text_lower)
+            or "huggingface" in text_lower
+            or "github" in text_lower):
             return "ai_tech", "ai_model_or_repo"
 
         # Default: general entities / concepts
@@ -196,7 +196,7 @@ class HierarchicalReasoningMachine:
                 "query_type": qtype,
             }
 
-        # Sports / event queries
+        # Sports / event queries (explicit score/result)
         if "who won" in text_lower or "score of" in text_lower or "final score" in text_lower:
             topic = content.strip()
             return {
