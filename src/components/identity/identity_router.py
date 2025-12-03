@@ -9,7 +9,8 @@ class IdentityRouter:
     """
     Maps free-form user questions to canonical identity slots using:
       - string pattern matching
-      - simple semantic similarity between query and canonical questions.
+      - simple semantic similarity between query and canonical questions,
+    but only when the question clearly refers to the assistant (you/your/Adaptheon).
     """
 
     def __init__(self, patterns_path: str = "src/components/identity/identity_patterns.json"):
@@ -23,6 +24,25 @@ class IdentityRouter:
         with open(full, "r") as f:
             self.patterns = json.load(f)
 
+    def _targets_assistant(self, q_lower: str) -> bool:
+        """
+        Return True only if the question is clearly about the assistant's identity or role.
+        """
+        if "adaptheon" in q_lower:
+            return True
+        pronouns = ["who are you", "what are you", "what is your purpose", "your purpose", "you do", "your limitations", "your limits", "how do you work", "how do you function", "how do you operate", "where does your knowledge come from", "where do you get your information"]
+        for p in pronouns:
+            if p in q_lower:
+                return True
+        # Generic "you" + a verb, but only if it doesn't contain clear third-party entities/teams
+        if "you" in q_lower or "your" in q_lower or "yourself" in q_lower:
+            # Heuristic: if it also clearly mentions sports teams, treat as non-identity
+            sports_tokens = ["giants", "patriots", "jets", "cowboys", "eagles", "nfl", "nba", "mlb", "premier league"]
+            if any(tok in q_lower for tok in sports_tokens):
+                return False
+            return True
+        return False
+
     def route(self, query: str) -> Optional[str]:
         """
         Return canonical slot id (e.g., 'who_are_you') if this is an identity-style question,
@@ -32,6 +52,10 @@ class IdentityRouter:
             return None
 
         q_lower = query.lower().strip()
+
+        # Only proceed if the question clearly targets the assistant
+        if not self._targets_assistant(q_lower):
+            return None
 
         # Explicitly let "what can you do" style questions go to normal capability handling
         capability_phrases = [
@@ -69,7 +93,7 @@ class IdentityRouter:
                 best_score = score
                 best_id = slot_id
 
-        # Require a small minimum similarity to avoid false positives
+        # Require a decent similarity, but only after assistant-targeting check
         if best_id is not None and best_score >= 0.12:
             return best_id
 
