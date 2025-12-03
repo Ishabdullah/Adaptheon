@@ -33,6 +33,18 @@ class IdentityRouter:
 
         q_lower = query.lower().strip()
 
+        # Explicitly let "what can you do" style questions go to normal capability handling
+        capability_phrases = [
+            "what can you do",
+            "what are you capable of",
+            "what can u do",
+            "what do you do for me",
+            "how can you help me",
+        ]
+        for phrase in capability_phrases:
+            if phrase in q_lower:
+                return None
+
         # 1) Direct pattern substring match
         for entry in self.patterns:
             slot_id = entry.get("id")

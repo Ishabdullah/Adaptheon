@@ -4,21 +4,38 @@ from typing import Optional
 class IdentityParaphraser:
     """
     Uses the existing LanguageSystem instance to paraphrase canonical identity answers.
-    Keeps meaning fixed, wording slightly varied, and limits length to 1–3 sentences.
+    Keeps meaning fixed, wording slightly varied, and limits length to 1–3 non-redundant sentences.
     """
 
     def __init__(self, llm):
         self.llm = llm
 
-    def _limit_sentences(self, text: str, max_sentences: int = 3) -> str:
+    def _split_sentences(self, text: str):
+        text = text.replace("?", ".").replace("!", ".")
+        parts = [s.strip() for s in text.split(".") if s.strip()]
+        return parts
+
+    def _limit_and_dedupe(self, text: str, max_sentences: int = 3) -> str:
         if not text:
             return text
-        # Normalize sentence boundaries
-        tmp = text.replace("?", ".").replace("!", ".")
-        parts = [s.strip() for s in tmp.split(".") if s.strip()]
+        parts = self._split_sentences(text)
         if not parts:
             return text.strip()
-        kept = parts[:max_sentences]
+
+        seen = set()
+        kept = []
+        for s in parts:
+            key = s.lower().strip()
+            if key in seen:
+                continue
+            seen.add(key)
+            kept.append(s)
+            if len(kept) >= max_sentences:
+                break
+
+        if not kept:
+            return text.strip()
+
         out = ". ".join(kept).strip()
         if not out.endswith("."):
             out = out + "."
@@ -27,10 +44,10 @@ class IdentityParaphraser:
     def paraphrase(self, slot_id: str, base_text: str) -> str:
         """
         Given a canonical identity slot and base text, return a short paraphrase.
-        If LLM is unavailable, return the base text directly.
+        If LLM is unavailable, return a trimmed, deduplicated version of the base text.
         """
         if not getattr(self.llm, "use_llm", False):
-            return self._limit_sentences(base_text, max_sentences=3)
+            return self._limit_and_dedupe(base_text, max_sentences=3)
 
         prompt = (
             "You are Adaptheon, a modular AI truth engine. "
@@ -49,6 +66,6 @@ class IdentityParaphraser:
             answer_part = raw_output.strip()
 
         if not answer_part:
-            return self._limit_sentences(base_text, max_sentences=3)
+            return self._limit_and_dedupe(base_text, max_sentences=3)
 
-        return self._limit_sentences(answer_part, max_sentences=3)
+        return self._limit_and_dedupe(answer_part, max_sentences=3)
