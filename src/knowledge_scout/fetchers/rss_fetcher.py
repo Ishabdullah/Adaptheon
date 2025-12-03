@@ -4,57 +4,71 @@ from .base import BaseFetcher, FetchResult, FetchSource
 
 class RSSFetcher(BaseFetcher):
     """
-    Fetches current information from RSS feeds.
-    Good for tech news, blogs, and timely information.
+    Fetches fresh news-style information from curated RSS feeds.
+    Good for: current events, crypto/market context, tech/science stories.
     """
+
     def __init__(self):
-        # Curated list of reliable feeds
+        # Three example feeds (tech, science/tech, crypto/markets)
         self.feeds = [
-            "https://news.ycombinator.com/rss",
-            "https://www.theverge.com/rss/index.xml",
-            "https://techcrunch.com/feed/"
+            # Tech / general computing news (Ars Technica)
+            "https://feeds.arstechnica.com/arstechnica/index",
+            # Science & technology headlines (ScienceDaily top tech)
+            "https://www.sciencedaily.com/rss/top/technology.xml",
+            # Cryptocurrency / blockchain news (one curated crypto feed)
+            "https://newsbtc.com/feed",
         ]
-    
+
     def fetch(self, query: str) -> Optional[FetchResult]:
-        print(f"    [RSS] Scanning {len(self.feeds)} feeds...")
-        
-        query_terms = set(query.lower().split())
-        best_match = None
-        best_score = 0
-        
+        query_lower = query.lower()
+        print("    [RSS] Scanning {} feeds...".format(len(self.feeds)))
+
+        best_entry = None
+        best_score = 0.0
+        best_feed_url = None
+
         for feed_url in self.feeds:
             try:
-                feed = feedparser.parse(feed_url)
-                
-                for entry in feed.entries[:15]:  # Check recent entries
-                    title = entry.get('title', '').lower()
-                    summary = entry.get('summary', entry.get('description', ''))
-                    
-                    # Calculate relevance score
-                    score = sum(1 for term in query_terms if term in title)
-                    score += sum(0.5 for term in query_terms if term in summary.lower())
-                    
-                    if score > best_score:
+                parsed = feedparser.parse(feed_url)
+                if parsed.bozo:
+                    continue
+
+                for entry in parsed.entries[:15]:
+                    title = getattr(entry, "title", "") or ""
+                    summary = getattr(entry, "summary", "") or ""
+                    text = (title + " " + summary).lower()
+
+                    # Simple keyword match scoring
+                    score = 0.0
+                    for token in query_lower.split():
+                        if token in text:
+                            score += 1.0
+
+                    if score > best_score and len(summary) > 40:
                         best_score = score
-                        best_match = {
-                            'title': entry.get('title', ''),
-                            'summary': summary[:300],
-                            'link': entry.get('link', '')
-                        }
-            
+                        best_entry = entry
+                        best_feed_url = feed_url
+
             except Exception as e:
-                print(f"    [RSS] Feed error: {e}")
+                print("    [RSS] Error reading feed {}: {}".format(feed_url, e))
                 continue
-        
-        if best_match and best_score > 0:
-            print(f"    [RSS] ✓ Found: '{best_match['title']}'")
-            return FetchResult(
-                query=query,
-                summary=f"{best_match['title']}: {best_match['summary']}",
-                source=FetchSource.LOCAL_RSS,
-                confidence=min(0.6 + (best_score * 0.1), 0.9),
-                url=best_match['link']
-            )
-        
-        print(f"    [RSS] ✗ No relevant articles found")
-        return None
+
+        if not best_entry or best_score == 0.0:
+            print("    [RSS] ✗ No relevant articles found")
+            return None
+
+        title = getattr(best_entry, "title", "").strip()
+        summary = getattr(best_entry, "summary", "").strip()
+        link = getattr(best_entry, "link", None)
+
+        print("    [RSS] ✓ Found: '{}'".format(title))
+        # Confidence is light: it depends on keyword overlap only
+        confidence = min(0.75, 0.35 + 0.05 * best_score)
+
+        return FetchResult(
+            query=query,
+            summary=title + ": " + summary,
+            source=FetchSource.LOCAL_RSS,
+            confidence=confidence,
+            url=link or best_feed_url,
+        )

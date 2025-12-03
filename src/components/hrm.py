@@ -1,15 +1,14 @@
 import time
 import string
 
+
 class HierarchicalReasoningMachine:
     """
-    Logic Cortex (Phase 1.5).
-    Can:
-    - Plan
-    - Read/write memory
-    - Decide when to trigger Knowledge Scout
-    - Reuse known facts from semantic memory
+    Logic Cortex (Phase 2).
+    Handles planning, memory, knowledge, corrections, search hints,
+    and typed queries like prices and weather.
     """
+
     def __init__(self):
         pass
 
@@ -18,11 +17,31 @@ class HierarchicalReasoningMachine:
         content = intent_data["content"]
         print("[HRM] Analyzing Intent: {}".format(intent_type))
 
-        # 1. Planning
+        text_lower = content.lower()
+
+        # Typed queries first
+        if "current price of" in text_lower or "price of" in text_lower:
+            # crude asset extraction: after "price of"
+            raw = text_lower
+            if "current price of" in raw:
+                raw = raw.split("current price of", 1)[1]
+            elif "price of" in raw:
+                raw = raw.split("price of", 1)[1]
+            asset = raw.strip().strip(string.punctuation)
+            return {
+                "action": "PRICE_QUERY",
+                "asset": asset,
+            }
+
+        if "weather" in text_lower:
+            return {
+                "action": "WEATHER_QUERY",
+                "location_hint": content,
+            }
+
         if intent_type == "PLANNING":
             return self._generate_plan(content)
 
-        # 2. Memory write (simple preference / fact)
         elif intent_type == "MEMORY_WRITE":
             fact = content.replace("remember", "").strip()
             return {
@@ -32,7 +51,6 @@ class HierarchicalReasoningMachine:
                 "response": "I have stored that in your preference memory.",
             }
 
-        # 3. Memory read
         elif intent_type == "MEMORY_READ":
             prefs = memory_context.get("user_preferences", {})
             return {
@@ -41,10 +59,9 @@ class HierarchicalReasoningMachine:
                 "response": "Here is what I currently know about you: {}".format(prefs),
             }
 
-        # 4. Knowledge query: "what is X" / "define X"
-        elif "what is" in content.lower() or "define" in content.lower():
+        elif "what is" in text_lower or "define" in text_lower:
             raw = (
-                content.lower()
+                text_lower
                 .replace("what is", "")
                 .replace("define", "")
             )
@@ -53,20 +70,40 @@ class HierarchicalReasoningMachine:
 
             semantic = memory_context.get("semantic", {})
             if key in semantic:
-                # We know this topic; Meta-Core will decide how to phrase the answer
                 return {
                     "action": "RETURN_KNOWLEDGE",
                     "topic": topic
                 }
             else:
-                # Not known yet → trigger Knowledge Scout
                 return {
                     "action": "TRIGGER_SCOUT",
                     "topic": topic,
                     "response": "I do not have this in local memory yet. Launching Knowledge Scout.",
                 }
 
-        # 5. Default conversational path
+        elif intent_type == "CORRECTION":
+            semantic = memory_context.get("semantic", {})
+            best_topic = None
+            for k in semantic.keys():
+                if not k.startswith("knowledge_"):
+                    continue
+                name = k.replace("knowledge_", "").replace("_", " ")
+                if name in text_lower:
+                    best_topic = name
+                    break
+
+            return {
+                "action": "VERIFY_AND_UPDATE",
+                "topic": best_topic,
+                "user_correction": content,
+            }
+
+        elif intent_type == "SEARCH_HINT":
+            return {
+                "action": "UPDATE_SEARCH_POLICY",
+                "instruction": content,
+            }
+
         else:
             return {
                 "action": "CONVERSE",
