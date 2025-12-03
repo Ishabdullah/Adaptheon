@@ -156,7 +156,7 @@ class KnowledgeScout:
         wiki_result = self.wikipedia.fetch(query)
         rss_result = self.rss.fetch(query)
 
-        candidates = []
+        candidates: List[TruthResult] = []
         if local_result is not None:
             tr = TruthResult(
                 status="FOUND",
@@ -233,12 +233,21 @@ class KnowledgeScout:
         # Apply simple numeric policy filter if needed
         if policy and candidates:
             if policy.get("require_numeric"):
-                filtered = []
+                filtered: List[TruthResult] = []
                 for r in candidates:
                     if any(ch.isdigit() for ch in r.canonical_summary):
                         filtered.append(r)
                 if filtered:
                     candidates = filtered
+
+        # Sports safety guard: do not hallucinate winners from generic news
+        if candidates:
+            lower_q = q_key
+            sports_like = ("who won" in lower_q) or ("score of" in lower_q) or ("giants" in lower_q) or ("nfl" in lower_q)
+            only_news = all(r.primary_source == SourceKind.NEWS_RSS for r in candidates)
+            if sports_like and only_news:
+                self._record_unknown(query, "Only NEWS_RSS candidates for sports-like query")
+                candidates = []
 
         if not candidates:
             self._record_unknown(query, "No candidates from Wikidata/Wikipedia/RSS/Local")
