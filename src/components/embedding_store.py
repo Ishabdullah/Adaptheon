@@ -1,92 +1,72 @@
 import os
-from typing import List, Dict, Any, Optional
-
-try:
-    from qdrant_client import QdrantClient  # type: ignore
-    HAVE_QDRANT = True
-except Exception:
-    QdrantClient = None  # type: ignore
-    HAVE_QDRANT = False
+import json
+from typing import List, Dict, Any, Optional, Tuple
+from components.semantic_utils import text_to_vector, cosine_similarity
 
 
 class EmbeddingStore:
     """
-    Vector memory.
-    If qdrant-client is available, uses Qdrant local mode with FastEmbed.
-    Otherwise falls back to an in-memory list so the system still runs.
+    Very small in-process vector store backed by a JSON file.
+    Stores documents as bag-of-words vectors using text_to_vector and supports
+    top-k cosine similarity search. This is enough for local RAG-style retrieval.[web:643][web:646]
     """
 
-    def __init__(self, path: Optional[str] = None, collection_name: str = "semantic_knowledge"):
-        self.collection_name = collection_name
-        self.memory_points: List[Dict[str, Any]] = []
+    def __init__(self, path: str = "data/vector_store.json"):
+        self.path = path
+        self.docs: Dict[str, Dict[str, Any]] = {}
+        self._load()
 
-        if HAVE_QDRANT:
-            base_path = path or "data/vector_store"
-            os.makedirs(base_path, exist_ok=True)
+    def _load(self):
+        os.makedirs(os.path.dirname(self.path), exist_ok=True)
+        if os.path.exists(self.path):
             try:
-                self.client = QdrantClient(path=base_path)
+                with open(self.path, "r") as f:
+                    self.docs = json.load(f)
             except Exception:
-                self.client = None
+                self.docs = {}
         else:
-            self.client = None
+            self.docs = {}
 
-    def add_document(self, doc_id: Optional[str], text: str, metadata: Optional[Dict[str, Any]] = None):
-        if not text:
-            return
-        if self.client is None:
-            # Fallback: store in simple list
-            self.memory_points.append(
-                {
-                    "id": doc_id,
-                    "text": text,
-                    "metadata": metadata or {},
-                }
-            )
-            return
+    def _save(self):
+        with open(self.path, "w") as f:
+            json.dump(self.docs, f, indent=2)
 
-        from uuid import uuid4
+    def add_document(self, doc_id: str, text: str, metadata: Optional[Dict[str, Any]] = None):
+        """
+        Store or update a document and its vector representation.
+        """
+        vec = text_to_vector(text)
+        self.docs[doc_id] = {
+            "text": text,
+            "vector": {w: int(c) for w, c in vec.items()},
+            "metadata": metadata or {},
+        }
+        self._save()
 
-        if doc_id is None:
-            doc_id = uuid4().hex
-        docs = [text]
-        metas = [metadata or {}]
-        ids = [doc_id]
-        try:
-            self.client.add(
-                collection_name=self.collection_name,
-                documents=docs,
-                metadata=metas,
-                ids=ids,
-            )
-        except Exception:
-            return
-
-    def search_similar_text(self, query: str, limit: int = 5) -> List[Dict[str, Any]]:
-        if not query:
+    def query(self, query_text: str, top_k: int = 3, min_score: float = 0.15) -> List[Tuple[str, float, Dict[str, Any]]]:
+        """
+        Return top-k (doc_id, score, payload) for documents most similar to query_text.[web:645][web:660]
+        """
+        if not self.docs:
             return []
 
-        if self.client is None:
-            # Very simple fallback: return recent memory points, no real similarity
-            return self.memory_points[-limit:]
+        q_vec = text_to_vector(query_text)
+        results: List[Tuple[str, float, Dict[str, Any]]] = []
+        for doc_id, payload in self.docs.items():
+            vec_dict = payload.get("vector", {})
+            other_vec = {w: int(c) for w, c in vec_dict.items()}
+            score = cosine_similarity(q_vec, other_vec)
+            if score >= min_score:
+                results.append(
+                    (
+                        doc_id,
+                        score,
+                        {
+                            "text": payload.get("text", ""),
+                            "metadata": payload.get("metadata", {}),
+                        },
+                    )
+                )
 
-        try:
-            result = self.client.query(
-                collection_name=self.collection_name,
-                query_text=query,
-                limit=limit,
-            )
-        except Exception:
-            return []
-
-        hits: List[Dict[str, Any]] = []
-        for point in getattr(result, "points", []):
-            payload = getattr(point, "payload", {}) or {}
-            score = getattr(point, "score", 0.0)
-            hits.append(
-                {
-                    "id": getattr(point, "id", None),
-                    "payload": payload,
-                    "score": score,
-                }
-            )
-        return hits
+        results.sort(key=lambda x: x[1], reverse=True)
+        return results[:top_k]
