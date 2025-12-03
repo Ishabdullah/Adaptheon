@@ -4,6 +4,7 @@ from typing import Optional, Dict, Any, List
 
 from components.domain_router import DomainRouter
 from components.fetchers.sports_fetcher import SportsFetcher
+from components.fetchers.science_fetcher import ScienceFetcher
 from knowledge_scout.truth_types import (
     TruthResult,
     SourceTier,
@@ -20,7 +21,8 @@ class KnowledgeScout:
     """
     Truth engine / curiosity engine.
     Tiered, structured retrieval with Wikidata as primary, Wikipedia/RSS/Local as fallbacks.
-    Domain-aware via DomainRouter, with a sports fast path and a guard against hallucinated winners.
+    Domain-aware via DomainRouter, with domain-specific fast paths (sports, science) and
+    a guard against hallucinated sports winners.
     """
 
     def __init__(self):
@@ -30,6 +32,7 @@ class KnowledgeScout:
         self._load_cache()
         self.domain_router = DomainRouter()
         self.sports = SportsFetcher()
+        self.science = ScienceFetcher()
         self.wikidata = WikidataClient()
         self.wikipedia = WikipediaFetcher()
         self.rss = RSSFetcher()
@@ -165,6 +168,41 @@ class KnowledgeScout:
                     ],
                     violations=[],
                     metadata=sports_res.get("metadata", {}),
+                )
+                self._to_cache(tr)
+                return {
+                    "status": tr.status,
+                    "summary": tr.canonical_summary,
+                    "source": tr.primary_source.value,
+                    "confidence": tr.confidence,
+                    "url": tr.metadata.get("url"),
+                    "truth_result": tr,
+                }
+
+        # Science/academic fast path: Semantic Scholar/arXiv for paper_search
+        if domain == "science_academic" and query_type == "paper_search":
+            sci_res = self.science.fetch(query)
+            if sci_res.get("status") == "FOUND":
+                tr = TruthResult(
+                    status="FOUND",
+                    query=query,
+                    canonical_summary=sci_res["summary"],
+                    confidence=sci_res.get("confidence", 0.9),
+                    primary_source=SourceKind.OTHER,
+                    tier=SourceTier.PRIMARY,
+                    snippets=[sci_res["summary"]],
+                    source_trace=[
+                        SourceTraceEntry(
+                            tier=SourceTier.PRIMARY,
+                            kind=SourceKind.OTHER,
+                            name="ScienceAPI",
+                            url=sci_res.get("url"),
+                            confidence=sci_res.get("confidence", 0.9),
+                            note="Semantic Scholar/arXiv science stack",
+                        )
+                    ],
+                    violations=[],
+                    metadata=sci_res.get("metadata", {}),
                 )
                 self._to_cache(tr)
                 return {
