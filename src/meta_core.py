@@ -10,6 +10,7 @@ from components.time_service import get_now
 from components.price_service import PriceService
 from components.weather_service import WeatherService
 from components.location_service import LocationService
+from components.tool_registry import Tool, ToolRegistry
 
 
 class MetaCognitiveCore:
@@ -22,11 +23,62 @@ class MetaCognitiveCore:
         self.price_service = PriceService()
         self.weather_service = WeatherService()
         self.location_service = LocationService()
+        self.tools = ToolRegistry()
+        self._register_tools()
         self.last_topic = None
         self.last_summary = None
         self.last_source = None
         print("[SYSTEM] All Cognitive Modules Online.")
 
+    def _register_tools(self):
+        """
+        Register core tools/modules for Meta-Cortex routing.
+        """
+        self.tools.register(
+            Tool(
+                name="llm_generate",
+                description="Local language generation via Qwen and llama.cpp",
+                func=lambda prompt, system_instruction=None: self.llm.generate(
+                    prompt, system_instruction
+                ),
+            )
+        )
+
+        self.tools.register(
+            Tool(
+                name="scout_search",
+                description="Multi-source knowledge search (cache, Wikipedia, RSS, local corpus)",
+                func=lambda query, policy=None, ignore_cache=False: self.scout.search(
+                    query, policy=policy, ignore_cache=ignore_cache
+                ),
+            )
+        )
+
+        self.tools.register(
+            Tool(
+                name="price_query",
+                description="Live crypto price lookup via CoinGecko",
+                func=lambda asset: self.price_service.get_price(asset),
+            )
+        )
+
+        self.tools.register(
+            Tool(
+                name="weather_current",
+                description="Current weather via Open-Meteo for given coordinates",
+                func=lambda latitude=None, longitude=None: self.weather_service.get_current_weather(
+                    latitude, longitude
+                ),
+            )
+        )
+
+        self.tools.register(
+            Tool(
+                name="location_details",
+                description="Device GPS + reverse geocoding into human-readable location",
+                func=lambda: self.location_service.get_location_details(),
+            )
+        )
     def _lookup_semantic(self, topic):
         key = "knowledge_{}".format(topic.replace(" ", "_"))
         semantic = self.memory.layers.get("semantic", {})
@@ -115,7 +167,7 @@ class MetaCognitiveCore:
 
         elif action == "PRICE_QUERY":
             asset = logic_output.get("asset", "").strip()
-            price_data = self.price_service.get_price(asset)
+            price_data = self.tools.invoke("price_query", asset=asset)
             if not price_data:
                 final_response = "I could not fetch a reliable live price for {} right now.".format(asset)
             else:
@@ -133,15 +185,15 @@ class MetaCognitiveCore:
                 final_response = rewritten
 
         elif action == "WEATHER_QUERY":
-            loc = self.location_service.get_location_details()
+            loc = self.tools.invoke("location_details")
             if loc:
                 lat = loc["latitude"]
                 lon = loc["longitude"]
                 place = loc.get("label", "your area")
-                weather = self.weather_service.get_current_weather(lat, lon)
+                weather = self.tools.invoke("weather_current", latitude=lat, longitude=lon)
             else:
                 place = "your area"
-                weather = self.weather_service.get_current_weather()
+                weather = self.tools.invoke("weather_current")
 
             if not weather:
                 final_response = "I could not fetch reliable weather data right now."
@@ -173,22 +225,25 @@ class MetaCognitiveCore:
                     raw_summary=summary,
                     source_label=source
                 )
-                final_response = rewritten + self._related_topics(topic, summary)
+                # Return only the rewritten answer, no extra suggestions
+                final_response = rewritten
                 self.last_topic = topic
                 self.last_summary = summary
                 self.last_source = source
 
         elif action == "TRIGGER_SCOUT":
             topic = logic_output["topic"]
+            time_sensitive = bool(logic_output.get("time_sensitive", False))
             print("[Meta-Core] Unknown topic '{}', launching Scout...".format(topic))
             policy = self._select_policy_for_query(topic)
-            scout_result = self.scout.search(topic, policy=policy)
+            scout_result = self.tools.invoke("scout_search", query=topic, policy=policy, ignore_cache=time_sensitive)
             if scout_result["status"] == "FOUND":
                 key = "knowledge_{}".format(topic.replace(" ", "_"))
                 metadata = {
                     "source": scout_result["source"],
                     "confidence": scout_result["confidence"],
                     "url": scout_result.get("url"),
+                    "tier": scout_result.get("truth_result").tier.value if scout_result.get("truth_result") else None,
                 }
                 if hasattr(self.memory, "add_semantic"):
                     self.memory.add_semantic(key, scout_result["summary"], metadata)
@@ -216,7 +271,7 @@ class MetaCognitiveCore:
                 print("[Meta-Core] Verifying user correction on '{}'...".format(topic))
                 key, old_fact = self._lookup_semantic(topic)
                 policy = self._select_policy_for_query(topic)
-                scout_result = self.scout.search(topic, policy=policy)
+                scout_result = self.tools.invoke("scout_search", query=topic, policy=policy, ignore_cache=False)
                 self._log_dispute(topic, user_corr, old_fact, scout_result)
 
                 if scout_result["status"] == "FOUND":
@@ -265,7 +320,12 @@ class MetaCognitiveCore:
                 final_response = "I have recorded your search preference and will use it in future lookups."
 
         else:
-            final_response = self.llm.generate(user_input)
+            # Default: generic chat via LLM tool
+            final_response = self.tools.invoke(
+                "llm_generate",
+                prompt=user_input,
+                system_instruction=None
+            )
 
         self.memory.add_episodic(user_input, final_response)
         return final_response
