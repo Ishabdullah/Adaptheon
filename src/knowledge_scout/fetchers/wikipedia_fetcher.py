@@ -1,78 +1,115 @@
 import requests
-from bs4 import BeautifulSoup
-import re
-import string
-from typing import Optional
 from .base import BaseFetcher, FetchResult, FetchSource
 
+
 class WikipediaFetcher(BaseFetcher):
-    def __init__(self):
-        self.headers = {
-            "User-Agent": "Adaptheon/1.0 (Educational Project; Python/3)"
+    """
+    Fetch summaries from Wikipedia using the MediaWiki search API.
+    More robust than guessing a page URL directly.
+    """
+
+    def __init__(self, language="en"):
+        self.language = language
+        self.api_url = "https://{}.wikipedia.org/w/api.php".format(language)
+
+    def _search_title(self, query):
+        params = {
+            "action": "query",
+            "list": "search",
+            "srsearch": query,
+            "format": "json",
         }
-
-    def _sanitize_topic(self, query: str) -> str:
-        cleaned = query.strip()
-        cleaned = cleaned.strip(string.punctuation)
-        return cleaned
-
-    def _clean_text(self, text: str, max_len: int = 400) -> str:
-        # Remove citation markers like [1], [2]
-        text = re.sub(r"[d+]", "", text)
-        # Collapse whitespace
-        text = re.sub(r"s+", " ", text)
-        # Keep only basic ASCII (letters, digits, punctuation, spaces)
-        text = "".join(ch for ch in text if ch in string.printable)
-        text = text.strip()
-        # Truncate long paragraphs
-        if len(text) > max_len:
-            text = text[:max_len].rstrip() + "..."
-        return text
-
-    def fetch(self, query: str) -> Optional[FetchResult]:
-        topic = self._sanitize_topic(query)
-        if not topic:
-            return None
-
-        formatted = topic.replace(" ", "_")
-        url = "https://en.wikipedia.org/wiki/{}".format(formatted)
-        print("    [Wikipedia] Fetching: {}".format(url))
-
         try:
-            resp = requests.get(url, headers=self.headers, timeout=5)
-            if resp.status_code == 404:
-                print("    [Wikipedia] Article not found (404)")
-                return None
-            resp.raise_for_status()
+            resp = requests.get(self.api_url, params=params, timeout=10)
+        except Exception:
+            return None
+        if resp.status_code != 200:
+            return None
+        try:
+            data = resp.json()
+        except Exception:
+            return None
+        search = data.get("query", {}).get("search", [])
+        if not search:
+            return None
+        return search[0].get("title")
 
-            soup = BeautifulSoup(resp.text, "html.parser")
-            content = soup.find(id="mw-content-text")
-            if not content:
-                print("    [Wikipedia] No content block found")
-                return None
+    def _get_extract(self, title):
+        params = {
+            "action": "query",
+            "prop": "extracts",
+            "explaintext": 1,
+            "exintro": 1,
+            "titles": title,
+            "format": "json",
+        }
+        try:
+            resp = requests.get(self.api_url, params=params, timeout=10)
+        except Exception:
+            return None
+        if resp.status_code != 200:
+            return None
+        try:
+            data = resp.json()
+        except Exception:
+            return None
+        pages = data.get("query", {}).get("pages", {})
+        if not pages:
+            return None
+        page = list(pages.values())[0]
+        extract = page.get("extract", "")
+        if not extract:
+            return None
+        return extract
 
-            for p in content.find_all("p"):
-                raw = p.get_text(strip=True)
-                if len(raw) < 80:
-                    continue
-                cleaned = self._clean_text(raw)
-                if len(cleaned) < 40:
-                    continue
-                print("    [Wikipedia] Extracted summary.")
-                return FetchResult(
-                    query=query,
-                    summary=cleaned,
-                    source=FetchSource.WIKIPEDIA,
-                    confidence=0.85,
-                    url=url,
-                )
+    def _canonical_fallback_title(self, query_lower):
+        """
+        Heuristic fallback for high-value concepts when search fails.
+        """
+        # US president: try canonical page
+        if "president of the united states" in query_lower:
+            return "President of the United States"
+        return None
 
-            print("    [Wikipedia] No substantial paragraph found")
+    def fetch(self, query: str):
+        print("    [Wikipedia] Searching for: '{}'".format(query))
+        query_lower = query.lower()
+
+        # First try direct search on the raw query
+        title = self._search_title(query)
+
+        # If that fails, try a canonical fallback for known patterns
+        if not title:
+            fallback = self._canonical_fallback_title(query_lower)
+            if fallback:
+                print("    [Wikipedia] Using canonical fallback title: '{}'".format(fallback))
+                title = fallback
+
+        if not title:
+            print("    [Wikipedia] ✗ No search results")
             return None
 
-        except requests.RequestException as e:
-            print("    [Wikipedia] Network error: {}".format(e))
+        extract = self._get_extract(title)
+        if not extract:
+            print("    [Wikipedia] ✗ No extract for '{}'".format(title))
             return None
-        except Exception as e:
-            print("    [Wikipedia] Parse error: {}".format(e))
-            return None
+
+        url_title = title.replace(" ", "_")
+        url = "https://{}.wikipedia.org/wiki/{}".format(self.language, url_title)
+
+        print("    [Wikipedia] ✓ Found page: '{}'".format(title))
+
+        base_conf = 0.75
+        if len(extract) < 200:
+            base_conf -= 0.1
+        if query_lower in title.lower():
+            base_conf += 0.05
+        confidence = max(0.5, min(0.9, base_conf))
+
+        return FetchResult(
+            query=query,
+            summary=extract,
+            source=FetchSource.WIKIPEDIA,
+            confidence=confidence,
+            url=url,
+        )
