@@ -1,0 +1,603 @@
+{
+  "general": {
+    "description": "General entities: people, companies, places, concepts.",
+    "primary": [
+      {
+        "id": "wikidata",
+        "kind": "knowledge_graph",
+        "base_url": "https://query.wikidata.org/sparql",
+        "notes": "Entity-level facts, office holders, structured triples."
+      }
+    ],
+    "secondary": [
+      {
+        "id": "wikipedia_rest",
+        "kind": "narrative",
+        "base_url": "https://en.wikipedia.org/api/rest_v1",
+        "notes": "Textual summaries when graph data is missing or insufficient."
+      },
+      {
+        "id": "dbpedia",
+        "kind": "knowledge_graph",
+        "base_url": "https://dbpedia.org/sparql",
+        "notes": "Fallback triples derived from Wikipedia."
+      }
+    ],
+    "tertiary": [
+      {
+        "id": "general_news_rss",
+        "kind": "news_rss",
+        "base_url": "",
+        "notes": "Curated news feeds for very recent entity mentions."
+      }
+    ]
+  },
+
+  "politics_government": {
+    "description": "Office holders, elections, government datasets.",
+    "primary": [
+      {
+        "id": "wikidata_politics",
+        "kind": "knowledge_graph",
+        "base_url": "https://query.wikidata.org/sparql",
+        "notes": "Political offices, heads of state, heads of government."
+      },
+      {
+        "id": "usa_gov",
+        "kind": "open_data_api",
+        "base_url": "https://api.usa.gov",
+        "notes": "US government information and links."
+      }
+    ],
+    "secondary": [
+      {
+        "id": "data_gov",
+        "kind": "open_data_catalog",
+        "base_url": "https://api.data.gov",
+        "notes": "US federal datasets including budgets, statistics, and policies."
+      },
+      {
+        "id": "gov_uk",
+        "kind": "open_data_api",
+        "base_url": "https://api.gov.uk",
+        "notes": "United Kingdom government data and documents."
+      }
+    ],
+    "tertiary": [
+      {
+        "id": "reuters_politics_rss",
+        "kind": "news_rss",
+        "base_url": "https://www.reuters.com/rssFeed/politicsNews",
+        "notes": "High-quality politics and government news."
+      },
+      {
+        "id": "ap_politics_rss",
+        "kind": "news_rss",
+        "base_url": "https://apnews.com/apf-politics?format=rss",
+        "notes": "Associated Press politics updates."
+      }
+    ]
+  },
+
+  "finance_markets": {
+    "description": "Stocks, ETFs, indices, and market data.",
+    "primary": [
+      {
+        "id": "yahoo_finance_http",
+        "kind": "market_api",
+        "base_url": "https://query1.finance.yahoo.com",
+        "notes": "Quote and snapshot data via HTTP endpoints."
+      }
+    ],
+    "secondary": [
+      {
+        "id": "alpha_vantage",
+        "kind": "market_api",
+        "base_url": "https://www.alphavantage.co",
+        "notes": "API-key-based equities and FX data (rate limited)."
+      }
+    ],
+    "tertiary": [
+      {
+        "id": "finnhub",
+        "kind": "market_api",
+        "base_url": "https://finnhub.io/api",
+        "notes": "Alternative equities, FX, and crypto data."
+      }
+    ]
+  },
+
+  "crypto": {
+    "description": "Cryptocurrency prices and metadata.",
+    "primary": [
+      {
+        "id": "coingecko",
+        "kind": "crypto_api",
+        "base_url": "https://api.coingecko.com/api/v3",
+        "notes": "Free price, market cap, and token metadata."
+      }
+    ],
+    "secondary": [
+      {
+        "id": "coinmarketcap",
+        "kind": "crypto_api",
+        "base_url": "https://pro-api.coinmarketcap.com",
+        "notes": "Requires key; useful for taxonomy and listings."
+      }
+    ],
+    "tertiary": [
+      {
+        "id": "cryptocompare",
+        "kind": "crypto_api",
+        "base_url": "https://min-api.cryptocompare.com",
+        "notes": "Additional prices and historical data."
+      }
+    ]
+  },
+
+  "weather": {
+    "description": "Current conditions and forecasts.",
+    "primary": [
+      {
+        "id": "open_meteo",
+        "kind": "weather_api",
+        "base_url": "https://api.open-meteo.com/v1",
+        "notes": "Free weather forecasts and current conditions."
+      }
+    ],
+    "secondary": [
+      {
+        "id": "noaa",
+        "kind": "weather_api",
+        "base_url": "https://api.weather.gov",
+        "notes": "US National Weather Service data."
+      }
+    ],
+    "tertiary": [
+      {
+        "id": "weather_gov_rss",
+        "kind": "news_rss",
+        "base_url": "https://forecast.weather.gov/wwamap/wwa_rss.php",
+        "notes": "Weather alerts and advisories."
+      }
+    ]
+  },
+
+  "maps_location": {
+    "description": "Geocoding, reverse geocoding, and place lookup.",
+    "primary": [
+      {
+        "id": "osm_nominatim",
+        "kind": "geocoder",
+        "base_url": "https://nominatim.openstreetmap.org",
+        "notes": "OpenStreetMap-based geocoding and reverse geocoding."
+      }
+    ],
+    "secondary": [
+      {
+        "id": "geonames",
+        "kind": "geodata_api",
+        "base_url": "http://api.geonames.org",
+        "notes": "Worldwide place names and basic geographic info."
+      }
+    ],
+    "tertiary": [
+      {
+        "id": "wikidata_geo",
+        "kind": "knowledge_graph",
+        "base_url": "https://query.wikidata.org/sparql",
+        "notes": "Geographic entities and coordinates."
+      }
+    ]
+  },
+
+  "science_academic": {
+    "description": "Papers, citations, and research metadata.",
+    "primary": [
+      {
+        "id": "semantic_scholar",
+        "kind": "research_api",
+        "base_url": "https://api.semanticscholar.org",
+        "notes": "Paper search, abstracts, citations, and author metadata."
+      }
+    ],
+    "secondary": [
+      {
+        "id": "arxiv",
+        "kind": "preprint_api",
+        "base_url": "http://export.arxiv.org/api",
+        "notes": "Physics, math, CS, and related preprints."
+      }
+    ],
+    "tertiary": [
+      {
+        "id": "crossref",
+        "kind": "doi_api",
+        "base_url": "https://api.crossref.org",
+        "notes": "DOI metadata and bibliographic records."
+      }
+    ]
+  },
+
+  "medical_info": {
+    "description": "Non-diagnostic health information and references.",
+    "primary": [
+      {
+        "id": "nih_medlineplus",
+        "kind": "health_api",
+        "base_url": "https://wsearch.nlm.nih.gov",
+        "notes": "Consumer-focused health topics and summaries."
+      }
+    ],
+    "secondary": [
+      {
+        "id": "pubmed_entrez",
+        "kind": "research_api",
+        "base_url": "https://eutils.ncbi.nlm.nih.gov/entrez/eutils",
+        "notes": "PubMed abstracts and bibliographic data."
+      }
+    ],
+    "tertiary": [
+      {
+        "id": "cdc_rss",
+        "kind": "news_rss",
+        "base_url": "https://tools.cdc.gov/api/v2/resources/media/",
+        "notes": "US Centers for Disease Control and Prevention updates."
+      }
+    ]
+  },
+
+  "sports": {
+    "description": "Scores, schedules, teams, and players.",
+    "primary": [
+      {
+        "id": "espn_scoreboard",
+        "kind": "sports_api",
+        "base_url": "https://site.api.espn.com/apis/site/v2/sports",
+        "notes": "Scoreboards and game results for major leagues."
+      }
+    ],
+    "secondary": [
+      {
+        "id": "thesportsdb",
+        "kind": "sports_api",
+        "base_url": "https://www.thesportsdb.com/api/v1/json",
+        "notes": "Community sports database with fixtures and results."
+      }
+    ],
+    "tertiary": [
+      {
+        "id": "generic_sports_rss",
+        "kind": "news_rss",
+        "base_url": "",
+        "notes": "Sports headlines as a last resort."
+      }
+    ]
+  },
+
+  "media_entertainment": {
+    "description": "Movies, TV, anime, and games.",
+    "primary": [
+      {
+        "id": "tmdb",
+        "kind": "media_api",
+        "base_url": "https://api.themoviedb.org/3",
+        "notes": "Movies and TV metadata (API key required)."
+      }
+    ],
+    "secondary": [
+      {
+        "id": "tvmaze",
+        "kind": "media_api",
+        "base_url": "https://api.tvmaze.com",
+        "notes": "TV show schedules and metadata."
+      },
+      {
+        "id": "igdb",
+        "kind": "media_api",
+        "base_url": "https://api.igdb.com/v4",
+        "notes": "Video game metadata (requires auth)."
+      }
+    ],
+    "tertiary": [
+      {
+        "id": "entertainment_rss",
+        "kind": "news_rss",
+        "base_url": "",
+        "notes": "Entertainment news feeds."
+      }
+    ]
+  },
+
+  "books_literature": {
+    "description": "Books, authors, and editions.",
+    "primary": [
+      {
+        "id": "openlibrary",
+        "kind": "book_api",
+        "base_url": "https://openlibrary.org",
+        "notes": "Public book and author data with multiple endpoints."
+      }
+    ],
+    "secondary": [
+      {
+        "id": "google_books",
+        "kind": "book_api",
+        "base_url": "https://www.googleapis.com/books/v1",
+        "notes": "Book search and metadata with API key."
+      }
+    ],
+    "tertiary": [
+      {
+        "id": "wikidata_books",
+        "kind": "knowledge_graph",
+        "base_url": "https://query.wikidata.org/sparql",
+        "notes": "Book and author entities in Wikidata."
+      }
+    ]
+  },
+
+  "music": {
+    "description": "Tracks, albums, and artists.",
+    "primary": [
+      {
+        "id": "musicbrainz",
+        "kind": "music_api",
+        "base_url": "https://musicbrainz.org/ws/2",
+        "notes": "Open music metadata web service with JSON or XML responses."
+      }
+    ],
+    "secondary": [
+      {
+        "id": "lastfm",
+        "kind": "music_api",
+        "base_url": "https://ws.audioscrobbler.com/2.0",
+        "notes": "Artist tags, track info, and charts."
+      }
+    ],
+    "tertiary": [
+      {
+        "id": "discogs",
+        "kind": "music_api",
+        "base_url": "https://api.discogs.com",
+        "notes": "Discography and release data."
+      }
+    ]
+  },
+
+  "transportation": {
+    "description": "Flights, airlines, and airports.",
+    "primary": [
+      {
+        "id": "aviationstack",
+        "kind": "transport_api",
+        "base_url": "http://api.aviationstack.com/v1",
+        "notes": "Flight status and basic aviation data."
+      }
+    ],
+    "secondary": [
+      {
+        "id": "opensky",
+        "kind": "transport_api",
+        "base_url": "https://opensky-network.org/api",
+        "notes": "Live aircraft state vectors."
+      }
+    ],
+    "tertiary": [
+      {
+        "id": "flightaware_rss",
+        "kind": "news_rss",
+        "base_url": "",
+        "notes": "Flight-related news and alerts."
+      }
+    ]
+  },
+
+  "open_data_economics": {
+    "description": "Macro statistics, census, and socio-economic indicators.",
+    "primary": [
+      {
+        "id": "world_bank",
+        "kind": "open_data_api",
+        "base_url": "https://api.worldbank.org/v2",
+        "notes": "Global development indicators and country statistics."
+      }
+    ],
+    "secondary": [
+      {
+        "id": "imf",
+        "kind": "open_data_api",
+        "base_url": "https://api.worldbank.org/v2", 
+        "notes": "Placeholder for IMF datasets (adjust base_url when used)."
+      },
+      {
+        "id": "oecd",
+        "kind": "open_data_api",
+        "base_url": "https://stats.oecd.org",
+        "notes": "OECD statistics and indicators."
+      }
+    ],
+    "tertiary": [
+      {
+        "id": "kaggle_datasets",
+        "kind": "static_dataset",
+        "base_url": "https://www.kaggle.com",
+        "notes": "Curated datasets for offline analysis."
+      }
+    ]
+  },
+
+  "trending_news": {
+    "description": "Global and topical news.",
+    "primary": [
+      {
+        "id": "reuters_world_rss",
+        "kind": "news_rss",
+        "base_url": "https://www.reuters.com/rssFeed/worldNews",
+        "notes": "Global news feed."
+      }
+    ],
+    "secondary": [
+      {
+        "id": "ap_top_rss",
+        "kind": "news_rss",
+        "base_url": "https://apnews.com/apf-topnews?format=rss",
+        "notes": "Associated Press top stories."
+      }
+    ],
+    "tertiary": [
+      {
+        "id": "bing_news_search",
+        "kind": "news_api",
+        "base_url": "https://api.bing.microsoft.com/v7.0/news/search",
+        "notes": "News search over multiple outlets."
+      }
+    ]
+  },
+
+  "social_trends": {
+    "description": "Public sentiment and discussion.",
+    "primary": [
+      {
+        "id": "reddit",
+        "kind": "social_api",
+        "base_url": "https://www.reddit.com",
+        "notes": "JSON endpoints for subreddit posts and comments."
+      }
+    ],
+    "secondary": [
+      {
+        "id": "youtube_rss",
+        "kind": "news_rss",
+        "base_url": "https://www.youtube.com/feeds/videos.xml",
+        "notes": "Channel and playlist updates via RSS."
+      }
+    ],
+    "tertiary": [
+      {
+        "id": "mastodon",
+        "kind": "social_api",
+        "base_url": "",
+        "notes": "Federated social network instances (configured per host)."
+      }
+    ]
+  },
+
+  "ai_tech": {
+    "description": "Models, code, and AI research.",
+    "primary": [
+      {
+        "id": "huggingface",
+        "kind": "model_api",
+        "base_url": "https://huggingface.co/api",
+        "notes": "Model cards, datasets, and spaces."
+      }
+    ],
+    "secondary": [
+      {
+        "id": "github",
+        "kind": "code_api",
+        "base_url": "https://api.github.com",
+        "notes": "Repository metadata, releases, and commits."
+      },
+      {
+        "id": "arxiv_cs_ai",
+        "kind": "preprint_api",
+        "base_url": "http://export.arxiv.org/api",
+        "notes": "Computer science, AI, and ML preprints."
+      }
+    ],
+    "tertiary": [
+      {
+        "id": "ai_news_rss",
+        "kind": "news_rss",
+        "base_url": "",
+        "notes": "AI and ML news feeds."
+      }
+    ]
+  },
+
+  "business_corporate": {
+    "description": "Company registries and filings.",
+    "primary": [
+      {
+        "id": "opencorporates",
+        "kind": "company_api",
+        "base_url": "https://api.opencorporates.com",
+        "notes": "Company registrations, officers, and jurisdictions."
+      }
+    ],
+    "secondary": [
+      {
+        "id": "sec_edgar",
+        "kind": "filings_api",
+        "base_url": "https://data.sec.gov",
+        "notes": "US public company filings and disclosures."
+      }
+    ],
+    "tertiary": [
+      {
+        "id": "wikidata_corporate",
+        "kind": "knowledge_graph",
+        "base_url": "https://query.wikidata.org/sparql",
+        "notes": "Corporate entities and relationships."
+      }
+    ]
+  },
+
+  "crime_justice": {
+    "description": "Crime statistics and justice data.",
+    "primary": [
+      {
+        "id": "fbi_crime_data",
+        "kind": "open_data_api",
+        "base_url": "https://crime-data-explorer.fr.cloud.gov",
+        "notes": "US crime statistics and trends."
+      }
+    ],
+    "secondary": [
+      {
+        "id": "local_open_data",
+        "kind": "open_data_catalog",
+        "base_url": "",
+        "notes": "City and state-level open data portals."
+      }
+    ],
+    "tertiary": [
+      {
+        "id": "bureau_justice_stats",
+        "kind": "open_data_api",
+        "base_url": "https://bjs.ojp.gov",
+        "notes": "Justice system statistics and reports."
+      }
+    ]
+  },
+
+  "knowledge_graphs": {
+    "description": "Secondary graphs beyond Wikidata.",
+    "primary": [
+      {
+        "id": "wikidata_core",
+        "kind": "knowledge_graph",
+        "base_url": "https://query.wikidata.org/sparql",
+        "notes": "Core structured knowledge graph."
+      }
+    ],
+    "secondary": [
+      {
+        "id": "freebase_archive",
+        "kind": "dump",
+        "base_url": "https://github.com/google/Freebase-archive",
+        "notes": "Legacy Freebase data dumps."
+      }
+    ],
+    "tertiary": [
+      {
+        "id": "babelnet",
+        "kind": "knowledge_graph",
+        "base_url": "https://babelnet.org",
+        "notes": "Multilingual semantic network with limited free access."
+      }
+    ]
+  }
+}
