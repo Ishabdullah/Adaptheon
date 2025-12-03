@@ -11,6 +11,7 @@ from components.price_service import PriceService
 from components.weather_service import WeatherService
 from components.location_service import LocationService
 from components.embedding_store import EmbeddingStore
+from components.graph_memory import GraphMemory
 from components.tool_registry import Tool, ToolRegistry
 
 
@@ -25,6 +26,7 @@ class MetaCognitiveCore:
         self.weather_service = WeatherService()
         self.location_service = LocationService()
         self.vector_store = EmbeddingStore()
+        self.graph_memory = GraphMemory()
         self.tools = ToolRegistry()
         self._register_tools()
         self.last_topic = None
@@ -256,6 +258,11 @@ class MetaCognitiveCore:
                         text=scout_result["summary"],
                         metadata={"topic": topic, "source": scout_result["source"]}
                     )
+                except Exception:
+                    pass
+                # Store in graph memory as topic -> primary source/entity
+                try:
+                    self.graph_memory.upsert_entity_from_truth(topic, scout_result)
                 except Exception:
                     pass
                 rewritten = self.llm.rewrite_from_sources(
