@@ -262,7 +262,14 @@ class MetaCognitiveCore:
             time_sensitive = bool(logic_output.get("time_sensitive", False))
             print("[Meta-Core] Unknown topic '{}', launching Scout...".format(topic))
             policy = self._select_policy_for_query(topic)
-            scout_result = self.tools.invoke("scout_search", query=topic, policy=policy, ignore_cache=time_sensitive)
+            scout_result = self.tools.invoke(
+                "scout_search",
+                query=topic,
+                policy=policy,
+                ignore_cache=time_sensitive,
+                domain=logic_output.get("domain"),
+                query_type=logic_output.get("query_type"),
+            )
             if scout_result["status"] == "FOUND":
                 key = "knowledge_{}".format(topic.replace(" ", "_"))
                 metadata = {
@@ -311,7 +318,14 @@ class MetaCognitiveCore:
                 print("[Meta-Core] Verifying user correction on '{}'...".format(topic))
                 key, old_fact = self._lookup_semantic(topic)
                 policy = self._select_policy_for_query(topic)
-                scout_result = self.tools.invoke("scout_search", query=topic, policy=policy, ignore_cache=False)
+                scout_result = self.tools.invoke(
+                    "scout_search",
+                    query=topic,
+                    policy=policy,
+                    ignore_cache=False,
+                    domain=logic_output.get("domain"),
+                    query_type=logic_output.get("query_type"),
+                )
                 self._log_dispute(topic, user_corr, old_fact, scout_result)
 
                 if scout_result["status"] == "FOUND":
