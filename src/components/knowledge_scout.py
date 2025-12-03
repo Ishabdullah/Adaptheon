@@ -1,7 +1,14 @@
 import os
 import json
+from typing import Optional, Dict, Any, List
 
-from knowledge_scout.fetchers.base import FetchSource
+from knowledge_scout.truth_types import (
+    TruthResult,
+    SourceTier,
+    SourceKind,
+    SourceTraceEntry,
+)
+from knowledge_scout.wikidata_client import WikidataClient
 from knowledge_scout.fetchers.wikipedia_fetcher import WikipediaFetcher
 from knowledge_scout.fetchers.rss_fetcher import RSSFetcher
 from knowledge_scout.fetchers.local_corpus_fetcher import LocalCorpusFetcher
@@ -9,15 +16,16 @@ from knowledge_scout.fetchers.local_corpus_fetcher import LocalCorpusFetcher
 
 class KnowledgeScout:
     """
-    Curiosity engine.
-    Uses cache + local corpus + web sources (Wikipedia, RSS)
-    to fill in missing knowledge and feed semantic memory.
+    Truth engine / curiosity engine.
+    Tiered, structured retrieval with Wikidata as primary, Wikipedia/RSS/Local as fallbacks.
     """
 
     def __init__(self):
         print("  [Scout] Initializing fetcher layers...")
         self.cache_path = "data/cache/knowledge_cache.json"
+        self.unknowns_path = "data/cache/unknowns.json"
         self._load_cache()
+        self.wikidata = WikidataClient()
         self.wikipedia = WikipediaFetcher()
         self.rss = RSSFetcher()
         self.local_corpus = LocalCorpusFetcher()
@@ -27,94 +35,243 @@ class KnowledgeScout:
         if os.path.exists(self.cache_path):
             with open(self.cache_path, "r") as f:
                 try:
-                    self.cache = json.load(f)
+                    self.cache: Dict[str, Any] = json.load(f)
                 except json.JSONDecodeError:
                     self.cache = {}
         else:
             self.cache = {}
 
+        if os.path.exists(self.unknowns_path):
+            with open(self.unknowns_path, "r") as f:
+                try:
+                    self.unknowns: List[Dict[str, Any]] = json.load(f)
+                except json.JSONDecodeError:
+                    self.unknowns = []
+        else:
+            self.unknowns = []
+
     def _save_cache(self):
         with open(self.cache_path, "w") as f:
             json.dump(self.cache, f, indent=2)
+        with open(self.unknowns_path, "w") as f:
+            json.dump(self.unknowns, f, indent=2)
 
-    def search(self, query: str, policy: dict = None):
+    def _record_unknown(self, query: str, reason: str):
+        entry = {
+            "query": query,
+            "reason": reason,
+        }
+        self.unknowns.append(entry)
+        self._save_cache()
+
+    def _from_cache(self, q_key: str) -> Optional[TruthResult]:
+        entry = self.cache.get(q_key)
+        if not entry:
+            return None
+        return TruthResult(
+            status=entry.get("status", "FOUND"),
+            query=entry.get("query", q_key),
+            canonical_summary=entry.get("canonical_summary", ""),
+            confidence=entry.get("confidence", 0.7),
+            primary_source=SourceKind(entry.get("primary_source", "wikipedia")),
+            tier=SourceTier(entry.get("tier", "secondary")),
+            snippets=entry.get("snippets", []),
+            source_trace=[
+                SourceTraceEntry(
+                    tier=SourceTier(t["tier"]),
+                    kind=SourceKind(t["kind"]),
+                    name=t.get("name", ""),
+                    url=t.get("url"),
+                    confidence=t.get("confidence", 0.0),
+                    note=t.get("note", ""),
+                )
+                for t in entry.get("source_trace", [])
+            ],
+            violations=entry.get("violations", []),
+            metadata=entry.get("metadata", {}),
+        )
+
+    def _to_cache(self, res: TruthResult):
+        trace_list = []
+        for t in res.source_trace:
+            trace_list.append(
+                {
+                    "tier": t.tier.value,
+                    "kind": t.kind.value,
+                    "name": t.name,
+                    "url": t.url,
+                    "confidence": t.confidence,
+                    "note": t.note,
+                }
+            )
+        self.cache[res.query.strip().lower()] = {
+            "status": res.status,
+            "query": res.query,
+            "canonical_summary": res.canonical_summary,
+            "confidence": res.confidence,
+            "primary_source": res.primary_source.value,
+            "tier": res.tier.value,
+            "snippets": res.snippets,
+            "source_trace": trace_list,
+            "violations": res.violations,
+            "metadata": res.metadata,
+        }
+        self._save_cache()
+
+    def search(self, query: str, policy: Dict[str, Any] = None, ignore_cache: bool = False) -> Dict[str, Any]:
         q_key = query.strip().lower()
 
-        if q_key in self.cache:
-            print("    [Cache] ✓ Hit: '{}'".format(q_key))
-            entry = self.cache[q_key]
+        if not ignore_cache:
+            cached = self._from_cache(q_key)
+            if cached:
+                print("    [Cache] ✓ Hit: '{}'".format(q_key))
+                return {
+                    "status": cached.status,
+                    "summary": cached.canonical_summary,
+                    "source": cached.primary_source.value,
+                    "confidence": cached.confidence,
+                    "url": cached.metadata.get("entity_iri") or None,
+                    "truth_result": cached,
+                }
+            else:
+                print("    [Cache] ✗ Miss: '{}'".format(q_key))
+        else:
+            print("    [Cache] ↷ Bypassing cache for time-sensitive query '{}'".format(q_key))
+
+        # Tier 1: Wikidata (structured)
+        primary = self.wikidata.lookup_entity(query)
+        if primary:
+            self._to_cache(primary)
             return {
                 "status": "FOUND",
-                "summary": entry.get("summary", ""),
-                "source": entry.get("source", "unknown"),
-                "confidence": entry.get("confidence", 0.7),
-                "url": entry.get("url"),
+                "summary": primary.canonical_summary,
+                "source": primary.primary_source.value,
+                "confidence": primary.confidence,
+                "url": primary.metadata.get("entity_iri"),
+                "truth_result": primary,
             }
 
-        print("    [Cache] ✗ Miss: '{}'".format(q_key))
-
+        # Tier 2: Local corpus + Wikipedia
         local_result = self.local_corpus.fetch(query)
         wiki_result = self.wikipedia.fetch(query)
         rss_result = self.rss.fetch(query)
 
-        candidates = [r for r in [local_result, wiki_result, rss_result] if r is not None]
+        candidates = []
+        if local_result is not None:
+            tr = TruthResult(
+                status="FOUND",
+                query=query,
+                canonical_summary=local_result.summary,
+                confidence=local_result.confidence + 0.05,
+                primary_source=SourceKind.LOCAL_CORPUS,
+                tier=SourceTier.SECONDARY,
+                snippets=[local_result.summary],
+                source_trace=[
+                    SourceTraceEntry(
+                        tier=SourceTier.SECONDARY,
+                        kind=SourceKind.LOCAL_CORPUS,
+                        name="LocalCorpus",
+                        url=None,
+                        confidence=local_result.confidence,
+                        note="Local text corpus",
+                    )
+                ],
+                violations=[],
+                metadata={"path": getattr(local_result, "path", None)},
+            )
+            candidates.append(tr)
 
-        # Apply simple policy filters before scoring
-        if policy:
-            require_numeric = bool(policy.get("require_numeric", False))
-            if require_numeric:
+        if wiki_result is not None:
+            tr = TruthResult(
+                status="FOUND",
+                query=query,
+                canonical_summary=wiki_result.summary,
+                confidence=wiki_result.confidence + 0.05,
+                primary_source=SourceKind.WIKIPEDIA,
+                tier=SourceTier.SECONDARY,
+                snippets=[wiki_result.summary],
+                source_trace=[
+                    SourceTraceEntry(
+                        tier=SourceTier.SECONDARY,
+                        kind=SourceKind.WIKIPEDIA,
+                        name="Wikipedia",
+                        url=wiki_result.url,
+                        confidence=wiki_result.confidence,
+                        note="Wikipedia extract",
+                    )
+                ],
+                violations=[],
+                metadata={"url": wiki_result.url},
+            )
+            candidates.append(tr)
+
+        # Tier 3: RSS/news as last resort
+        if rss_result is not None:
+            tr = TruthResult(
+                status="FOUND",
+                query=query,
+                canonical_summary=rss_result.summary,
+                confidence=rss_result.confidence,
+                primary_source=SourceKind.NEWS_RSS,
+                tier=SourceTier.TERTIARY,
+                snippets=[rss_result.summary],
+                source_trace=[
+                    SourceTraceEntry(
+                        tier=SourceTier.TERTIARY,
+                        kind=SourceKind.NEWS_RSS,
+                        name="RSS",
+                        url=rss_result.url,
+                        confidence=rss_result.confidence,
+                        note="News RSS snippet",
+                    )
+                ],
+                violations=[],
+                metadata={"url": rss_result.url},
+            )
+            candidates.append(tr)
+
+        # Apply simple numeric policy filter if needed
+        if policy and candidates:
+            if policy.get("require_numeric"):
                 filtered = []
                 for r in candidates:
-                    if any(ch.isdigit() for ch in r.summary):
+                    if any(ch.isdigit() for ch in r.canonical_summary):
                         filtered.append(r)
                 if filtered:
                     candidates = filtered
 
         if not candidates:
-            self.cache[q_key] = {
-                "summary": "I could not find reliable information about '{}' yet.".format(query),
-                "source": "none",
-                "confidence": 0.0,
-                "url": None,
-            }
-            self._save_cache()
+            self._record_unknown(query, "No candidates from Wikidata/Wikipedia/RSS/Local")
+            not_found = TruthResult(
+                status="NOT_FOUND",
+                query=query,
+                canonical_summary="I could not find reliable information about '{}' yet.".format(query),
+                confidence=0.0,
+                primary_source=SourceKind.OTHER,
+                tier=SourceTier.TERTIARY,
+                snippets=[],
+                source_trace=[],
+                violations=["NO_CANDIDATES"],
+                metadata={},
+            )
+            self._to_cache(not_found)
             return {
                 "status": "NOT_FOUND",
-                "summary": self.cache[q_key]["summary"],
-                "source": "none",
-                "confidence": 0.0,
+                "summary": not_found.canonical_summary,
+                "source": not_found.primary_source.value,
+                "confidence": not_found.confidence,
                 "url": None,
+                "truth_result": not_found,
             }
 
-        def score(r):
-            bonus = 0.0
-            # Prefer local corpus slightly
-            if r.source == FetchSource.LOCAL_CORPUS:
-                bonus += 0.05
-            # Policy-based source preference
-            if policy:
-                prefer_src = policy.get("prefer_source")
-                if prefer_src and isinstance(prefer_src, list):
-                    src_val = r.source.value if hasattr(r.source, "value") else str(r.source)
-                    if src_val in prefer_src:
-                        bonus += 0.1
-            return r.confidence + bonus
-
-        best = sorted(candidates, key=score, reverse=True)[0]
-        source_value = best.source.value if hasattr(best.source, "value") else str(best.source)
-
-        self.cache[q_key] = {
-            "summary": best.summary,
-            "source": source_value,
-            "confidence": best.confidence,
-            "url": best.url,
-        }
-        self._save_cache()
+        best = sorted(candidates, key=lambda r: r.confidence, reverse=True)[0]
+        self._to_cache(best)
 
         return {
             "status": "FOUND",
-            "summary": best.summary,
-            "source": source_value,
+            "summary": best.canonical_summary,
+            "source": best.primary_source.value,
             "confidence": best.confidence,
-            "url": best.url,
+            "url": best.metadata.get("url") or best.metadata.get("entity_iri"),
+            "truth_result": best,
         }
