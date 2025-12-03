@@ -37,10 +37,7 @@ class MetaCognitiveCore:
         print("[SYSTEM] All Cognitive Modules Online.")
 
     def _register_tools(self):
-        """
-        Register core tools/modules for Meta-Cortex routing.
-        """
-        # Language generation tool
+        # (unchanged registrations: llm_generate, scout_search, price_query, weather_current, location_details)
         self.tools.register(
             Tool(
                 name="llm_generate",
@@ -51,7 +48,6 @@ class MetaCognitiveCore:
             )
         )
 
-        # Knowledge Scout tool (domain-aware)
         self.tools.register(
             Tool(
                 name="scout_search",
@@ -62,7 +58,6 @@ class MetaCognitiveCore:
             )
         )
 
-        # Live price tool
         self.tools.register(
             Tool(
                 name="price_query",
@@ -71,7 +66,6 @@ class MetaCognitiveCore:
             )
         )
 
-        # Live weather tool
         self.tools.register(
             Tool(
                 name="weather_current",
@@ -82,7 +76,6 @@ class MetaCognitiveCore:
             )
         )
 
-        # Location tool
         self.tools.register(
             Tool(
                 name="location_details",
@@ -118,6 +111,52 @@ class MetaCognitiveCore:
         scores.sort(key=lambda x: x[1], reverse=True)
         top = [name for name, _ in scores[:3]]
         return " You might also ask about: " + ", ".join(top) + "."
+
+    def _build_memory_context(self, topic: str) -> str:
+        """
+        Build a compact text context from vector and graph memories for RAG-style conditioning.[web:644][web:489]
+        """
+        parts = []
+
+        # Vector memory: top-k similar docs by topic string
+        try:
+            vec_hits = self.vector_store.query(topic, top_k=3, min_score=0.2)
+        except Exception:
+            vec_hits = []
+
+        if vec_hits:
+            vs = []
+            for doc_id, score, payload in vec_hits:
+                meta = payload.get("metadata", {})
+                src = meta.get("source", "memory")
+                vs.append(f"- [{src}] {payload.get('text', '')}")
+            parts.append("Vector memory snippets:
+" + "
+".join(vs))
+
+        # Graph memory: 1-hop neighborhood around topic
+        try:
+            neigh = self.graph_memory.neighborhood(topic, max_hops=1)
+        except Exception:
+            neigh = {"nodes": {}, "edges": []}
+
+        if neigh.get("nodes"):
+            node_summaries = []
+            for label, node in neigh["nodes"].items():
+                if label.lower() == topic.lower():
+                    continue
+                summ = node.get("summary", "")
+                if not summ:
+                    continue
+                node_summaries.append(f"- [{label}] {summ}")
+            if node_summaries:
+                parts.append("Graph memory neighbors:
+" + "
+".join(node_summaries))
+
+        return "
+
+".join(parts)
 
     def _log_dispute(self, topic, user_text, old_fact, scout_result):
         path = "data/memory/disputes.json"
@@ -155,7 +194,6 @@ class MetaCognitiveCore:
         return None
 
     def run_cycle(self, user_input):
-        # Identity module: handle core "who/what are you" style questions first
         ident = self.identity.handle(user_input)
         if ident.get("handled"):
             final = ident.get("response", "")
@@ -245,16 +283,23 @@ class MetaCognitiveCore:
             if fact is None:
                 final_response = "I thought I knew about '{}', but I cannot find it in memory yet.".format(topic)
             else:
-                summary = fact.get("summary", "")
+                base_summary = fact.get("summary", "")
                 source = fact.get("metadata", {}).get("source", "memory")
+                mem_ctx = self._build_memory_context(topic)
+                combined = base_summary
+                if mem_ctx:
+                    combined = mem_ctx + "
+
+Primary fact:
+" + base_summary
                 rewritten = self.llm.rewrite_from_sources(
                     question=topic,
-                    raw_summary=summary,
+                    raw_summary=combined,
                     source_label=source
                 )
                 final_response = rewritten
                 self.last_topic = topic
-                self.last_summary = summary
+                self.last_summary = base_summary
                 self.last_source = source
 
         elif action == "TRIGGER_SCOUT":
@@ -280,7 +325,6 @@ class MetaCognitiveCore:
                 }
                 if hasattr(self.memory, "add_semantic"):
                     self.memory.add_semantic(key, scout_result["summary"], metadata)
-                # Store in vector memory for future semantic search
                 try:
                     self.vector_store.add_document(
                         doc_id=key,
@@ -289,14 +333,22 @@ class MetaCognitiveCore:
                     )
                 except Exception:
                     pass
-                # Store in graph memory as topic -> primary source/entity
                 try:
                     self.graph_memory.upsert_entity_from_truth(topic, scout_result)
                 except Exception:
                     pass
+
+                mem_ctx = self._build_memory_context(topic)
+                combined = scout_result["summary"]
+                if mem_ctx:
+                    combined = mem_ctx + "
+
+External summary:
+" + scout_result["summary"]
+
                 rewritten = self.llm.rewrite_from_sources(
                     question=topic,
-                    raw_summary=scout_result["summary"],
+                    raw_summary=combined,
                     source_label=scout_result["source"]
                 )
                 final_response = rewritten
@@ -374,7 +426,6 @@ class MetaCognitiveCore:
                 final_response = "I have recorded your search preference and will use it in future lookups."
 
         else:
-            # Default: generic chat via LLM tool
             final_response = self.tools.invoke(
                 "llm_generate",
                 prompt=user_input,
