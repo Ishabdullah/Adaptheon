@@ -51,13 +51,13 @@ class MetaCognitiveCore:
             )
         )
 
-        # Knowledge Scout tool
+        # Knowledge Scout tool (domain-aware)
         self.tools.register(
             Tool(
                 name="scout_search",
-                description="Multi-source knowledge search (cache, Wikipedia, RSS, local corpus)",
-                func=lambda query, policy=None, ignore_cache=False: self.scout.search(
-                    query, policy=policy, ignore_cache=ignore_cache
+                description="Multi-source knowledge search (cache, Wikipedia, RSS, local corpus, domain-aware)",
+                func=lambda query, policy=None, ignore_cache=False, domain=None, query_type=None: self.scout.search(
+                    query, policy=policy, ignore_cache=ignore_cache, domain=domain, query_type=query_type
                 ),
             )
         )

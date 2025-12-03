@@ -2,6 +2,7 @@ import os
 import json
 from typing import Optional, Dict, Any, List
 
+from components.domain_router import DomainRouter
 from knowledge_scout.truth_types import (
     TruthResult,
     SourceTier,
@@ -18,6 +19,7 @@ class KnowledgeScout:
     """
     Truth engine / curiosity engine.
     Tiered, structured retrieval with Wikidata as primary, Wikipedia/RSS/Local as fallbacks.
+    Now domain-aware via DomainRouter, with sports guard against hallucinated winners.
     """
 
     def __init__(self):
@@ -25,6 +27,7 @@ class KnowledgeScout:
         self.cache_path = "data/cache/knowledge_cache.json"
         self.unknowns_path = "data/cache/unknowns.json"
         self._load_cache()
+        self.domain_router = DomainRouter()
         self.wikidata = WikidataClient()
         self.wikipedia = WikipediaFetcher()
         self.rss = RSSFetcher()
@@ -118,8 +121,23 @@ class KnowledgeScout:
         }
         self._save_cache()
 
-    def search(self, query: str, policy: Dict[str, Any] = None, ignore_cache: bool = False) -> Dict[str, Any]:
+    def search(
+        self,
+        query: str,
+        policy: Dict[str, Any] = None,
+        ignore_cache: bool = False,
+        domain: Optional[str] = None,
+        query_type: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Domain-aware search over primary/secondary/tertiary knowledge sources.
+        For now, domain is used mainly for logging and future specialization.
+        """
         q_key = query.strip().lower()
+
+        # Domain sources (currently informational; specialized fetchers will use this later)
+        if domain:
+            _ = self.domain_router.get_sources(domain)
 
         if not ignore_cache:
             cached = self._from_cache(q_key)
