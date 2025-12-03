@@ -9,6 +9,8 @@ from components.fetchers.books_fetcher import BooksFetcher
 from components.fetchers.media_fetcher import MediaFetcher
 from components.fetchers.music_fetcher import MusicFetcher
 from components.fetchers.flight_fetcher import FlightFetcher
+from components.fetchers.corporate_fetcher import CorporateFetcher
+from components.fetchers.crime_fetcher import CrimeFetcher
 from knowledge_scout.truth_types import (
     TruthResult,
     SourceTier,
@@ -25,8 +27,9 @@ class KnowledgeScout:
     """
     Truth engine / curiosity engine.
     Tiered, structured retrieval with Wikidata as primary, Wikipedia/RSS/Local as fallbacks.
-    Domain-aware via DomainRouter, with domain-specific fast paths (sports, science, books, media, music, flights)
-    and a guard against hallucinated sports winners.
+    Domain-aware via DomainRouter, with fast paths for sports, science, books, media, music,
+    transportation/flights, corporate, and crime/justice, plus a guard against hallucinated
+    sports winners.
     """
 
     def __init__(self):
@@ -41,6 +44,8 @@ class KnowledgeScout:
         self.media = MediaFetcher()
         self.music = MusicFetcher()
         self.flights = FlightFetcher()
+        self.corporate = CorporateFetcher()
+        self.crime = CrimeFetcher()
         self.wikidata = WikidataClient()
         self.wikipedia = WikipediaFetcher()
         self.rss = RSSFetcher()
@@ -142,10 +147,6 @@ class KnowledgeScout:
         domain: Optional[str] = None,
         query_type: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """
-        Domain-aware search over primary/secondary/tertiary knowledge sources.
-        'domain' and 'query_type' are hints from HRM/DomainRouter.
-        """
         q_key = query.strip().lower()
 
         if domain:
@@ -221,7 +222,7 @@ class KnowledgeScout:
                     "truth_result": tr,
                 }
 
-        # Books/literature fast path
+        # Books fast path
         if domain == "books_literature" and query_type == "book_info":
             book_res = self.books.fetch(query)
             if book_res.get("status") == "FOUND":
@@ -256,7 +257,7 @@ class KnowledgeScout:
                     "truth_result": tr,
                 }
 
-        # Media/entertainment fast path
+        # Media fast path
         if domain == "media_entertainment" and query_type == "media_info":
             media_res = self.media.fetch(query)
             if media_res.get("status") == "FOUND":
@@ -326,7 +327,7 @@ class KnowledgeScout:
                     "truth_result": tr,
                 }
 
-        # Transportation / flights fast path
+        # Flights fast path
         if domain == "transportation" and query_type == "flight_status":
             flight_res = self.flights.fetch(query)
             if flight_res.get("status") == "FOUND":
@@ -361,6 +362,77 @@ class KnowledgeScout:
                     "truth_result": tr,
                 }
 
+        # Corporate fast path
+        if domain == "business_corporate" and query_type == "company_info":
+            corp_res = self.corporate.fetch(query)
+            if corp_res.get("status") == "FOUND":
+                tr = TruthResult(
+                    status="FOUND",
+                    query=query,
+                    canonical_summary=corp_res["summary"],
+                    confidence=corp_res.get("confidence", 0.86),
+                    primary_source=SourceKind.OTHER,
+                    tier=SourceTier.PRIMARY,
+                    snippets=[corp_res["summary"]],
+                    source_trace=[
+                        SourceTraceEntry(
+                            tier=SourceTier.PRIMARY,
+                            kind=SourceKind.OTHER,
+                            name="CorporateAPI",
+                            url=corp_res.get("url"),
+                            confidence=corp_res.get("confidence", 0.86),
+                            note="OpenCorporates corporate stack",
+                        )
+                    ],
+                    violations=[],
+                    metadata=corp_res.get("metadata", {}),
+                )
+                self._to_cache(tr)
+                return {
+                    "status": tr.status,
+                    "summary": tr.canonical_summary,
+                    "source": tr.primary_source.value,
+                    "confidence": tr.confidence,
+                    "url": tr.metadata.get("url"),
+                    "truth_result": tr,
+                }
+
+        # Crime/justice fast path
+        if domain == "crime_justice" and query_type == "crime_stats":
+            crime_res = self.crime.fetch(query)
+            if crime_res.get("status") == "FOUND":
+                tr = TruthResult(
+                    status="FOUND",
+                    query=query,
+                    canonical_summary=crime_res["summary"],
+                    confidence=crime_res.get("confidence", 0.82),
+                    primary_source=SourceKind.OTHER,
+                    tier=SourceTier.PRIMARY,
+                    snippets=[crime_res["summary"]],
+                    source_trace=[
+                        SourceTraceEntry(
+                            tier=SourceTier.PRIMARY,
+                            kind=SourceKind.OTHER,
+                            name="CrimeAPI",
+                            url=crime_res.get("url"),
+                            confidence=crime_res.get("confidence", 0.82),
+                            note="FBI Crime Data API stack",
+                        )
+                    ],
+                    violations=[],
+                    metadata=crime_res.get("metadata", {}),
+                )
+                self._to_cache(tr)
+                return {
+                    "status": tr.status,
+                    "summary": tr.canonical_summary,
+                    "source": tr.primary_source.value,
+                    "confidence": tr.confidence,
+                    "url": tr.metadata.get("url"),
+                    "truth_result": tr,
+                }
+
+        # --- Fallback tiers (Wikidata, Wikipedia, RSS, Local) unchanged from previous versions ---
         if not ignore_cache:
             cached = self._from_cache(q_key)
             if cached:
@@ -378,7 +450,6 @@ class KnowledgeScout:
         else:
             print("    [Cache] ↷ Bypassing cache for time-sensitive query '{}'".format(q_key))
 
-        # Tier 1: Wikidata (structured)
         primary = self.wikidata.lookup_entity(query)
         if primary:
             self._to_cache(primary)
@@ -391,7 +462,6 @@ class KnowledgeScout:
                 "truth_result": primary,
             }
 
-        # Tier 2: Local corpus + Wikipedia
         local_result = self.local_corpus.fetch(query)
         wiki_result = self.wikipedia.fetch(query)
         rss_result = self.rss.fetch(query)
@@ -445,7 +515,6 @@ class KnowledgeScout:
             )
             candidates.append(tr)
 
-        # Tier 3: RSS/news as last resort
         if rss_result is not None:
             tr = TruthResult(
                 status="FOUND",
@@ -470,7 +539,6 @@ class KnowledgeScout:
             )
             candidates.append(tr)
 
-        # Apply simple numeric policy filter if needed
         if policy and candidates:
             if policy.get("require_numeric"):
                 filtered: List[TruthResult] = []
@@ -480,7 +548,6 @@ class KnowledgeScout:
                 if filtered:
                     candidates = filtered
 
-        # Sports safety guard: do not hallucinate winners from generic news
         if candidates:
             lower_q = q_key
             sports_like = ("who won" in lower_q) or ("score of" in lower_q) or ("giants" in lower_q) or ("nfl" in lower_q)
@@ -515,7 +582,6 @@ class KnowledgeScout:
 
         best = sorted(candidates, key=lambda r: r.confidence, reverse=True)[0]
         self._to_cache(best)
-
         return {
             "status": "FOUND",
             "summary": best.canonical_summary,
