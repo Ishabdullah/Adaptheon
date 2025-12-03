@@ -10,6 +10,7 @@ from components.time_service import get_now
 from components.price_service import PriceService
 from components.weather_service import WeatherService
 from components.location_service import LocationService
+from components.embedding_store import EmbeddingStore
 from components.tool_registry import Tool, ToolRegistry
 
 
@@ -23,6 +24,7 @@ class MetaCognitiveCore:
         self.price_service = PriceService()
         self.weather_service = WeatherService()
         self.location_service = LocationService()
+        self.vector_store = EmbeddingStore()
         self.tools = ToolRegistry()
         self._register_tools()
         self.last_topic = None
@@ -247,6 +249,15 @@ class MetaCognitiveCore:
                 }
                 if hasattr(self.memory, "add_semantic"):
                     self.memory.add_semantic(key, scout_result["summary"], metadata)
+                # Store in vector memory for future semantic search
+                try:
+                    self.vector_store.add_document(
+                        doc_id=key,
+                        text=scout_result["summary"],
+                        metadata={"topic": topic, "source": scout_result["source"]}
+                    )
+                except Exception:
+                    pass
                 rewritten = self.llm.rewrite_from_sources(
                     question=topic,
                     raw_summary=scout_result["summary"],
