@@ -5,6 +5,7 @@ from typing import Optional, Dict, Any, List
 from components.domain_router import DomainRouter
 from components.fetchers.sports_fetcher import SportsFetcher
 from components.fetchers.science_fetcher import ScienceFetcher
+from components.fetchers.books_fetcher import BooksFetcher
 from knowledge_scout.truth_types import (
     TruthResult,
     SourceTier,
@@ -21,7 +22,7 @@ class KnowledgeScout:
     """
     Truth engine / curiosity engine.
     Tiered, structured retrieval with Wikidata as primary, Wikipedia/RSS/Local as fallbacks.
-    Domain-aware via DomainRouter, with domain-specific fast paths (sports, science) and
+    Domain-aware via DomainRouter, with domain-specific fast paths (sports, science, books) and
     a guard against hallucinated sports winners.
     """
 
@@ -33,6 +34,7 @@ class KnowledgeScout:
         self.domain_router = DomainRouter()
         self.sports = SportsFetcher()
         self.science = ScienceFetcher()
+        self.books = BooksFetcher()
         self.wikidata = WikidataClient()
         self.wikipedia = WikipediaFetcher()
         self.rss = RSSFetcher()
@@ -140,11 +142,10 @@ class KnowledgeScout:
         """
         q_key = query.strip().lower()
 
-        # Domain info is currently advisory; specialized stacks will be plugged in per-domain.
         if domain:
             _ = self.domain_router.get_sources(domain)
 
-        # Sports domain fast path: use SportsFetcher first for sports_result queries
+        # Sports domain fast path
         if domain == "sports" and query_type == "sports_result":
             sports_res = self.sports.fetch_result(query)
             if sports_res.get("status") == "FOUND":
@@ -179,7 +180,7 @@ class KnowledgeScout:
                     "truth_result": tr,
                 }
 
-        # Science/academic fast path: Semantic Scholar/arXiv for paper_search
+        # Science/academic fast path
         if domain == "science_academic" and query_type == "paper_search":
             sci_res = self.science.fetch(query)
             if sci_res.get("status") == "FOUND":
@@ -203,6 +204,41 @@ class KnowledgeScout:
                     ],
                     violations=[],
                     metadata=sci_res.get("metadata", {}),
+                )
+                self._to_cache(tr)
+                return {
+                    "status": tr.status,
+                    "summary": tr.canonical_summary,
+                    "source": tr.primary_source.value,
+                    "confidence": tr.confidence,
+                    "url": tr.metadata.get("url"),
+                    "truth_result": tr,
+                }
+
+        # Books/literature fast path
+        if domain == "books_literature" and query_type == "book_info":
+            book_res = self.books.fetch(query)
+            if book_res.get("status") == "FOUND":
+                tr = TruthResult(
+                    status="FOUND",
+                    query=query,
+                    canonical_summary=book_res["summary"],
+                    confidence=book_res.get("confidence", 0.85),
+                    primary_source=SourceKind.OTHER,
+                    tier=SourceTier.PRIMARY,
+                    snippets=[book_res["summary"]],
+                    source_trace=[
+                        SourceTraceEntry(
+                            tier=SourceTier.PRIMARY,
+                            kind=SourceKind.OTHER,
+                            name="BooksAPI",
+                            url=book_res.get("url"),
+                            confidence=book_res.get("confidence", 0.85),
+                            note="OpenLibrary books stack",
+                        )
+                    ],
+                    violations=[],
+                    metadata=book_res.get("metadata", {}),
                 )
                 self._to_cache(tr)
                 return {
