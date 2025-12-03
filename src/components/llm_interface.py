@@ -37,8 +37,8 @@ class LanguageSystem:
             "-p", prompt,
             "--n-predict", str(max_tokens),
             "--temp", str(temperature),
-            "-no-cnv",        # disable conversation mode [web:256][web:260]
-            "-st",            # single-turn, non-interactive [web:256]
+            "-no-cnv",
+            "-st",
         ]
 
         try:
@@ -48,7 +48,6 @@ class LanguageSystem:
                 stderr=subprocess.PIPE,
                 text=True,
             )
-            # Add a timeout so we don't hang forever on bad runs
             out, err = proc.communicate(timeout=40)
 
             if proc.returncode != 0:
@@ -68,15 +67,26 @@ class LanguageSystem:
             return "[LLM Error] {}".format(e)
 
     def generate(self, prompt, system_instruction=None):
+        """
+        Generic text generation.
+        Uses a simple Question/Answer pattern and returns only the answer text.
+        """
         if not self.use_llm:
             return "[LLM Simulation] " + prompt
 
         if system_instruction:
-            full_prompt = system_instruction + " User: " + prompt + " Assistant:"
+            full_prompt = system_instruction + " Question: " + prompt + " Answer:"
         else:
-            full_prompt = "User: " + prompt + " Assistant:"
+            full_prompt = "Question: " + prompt + " Answer:"
 
-        return self._call_llm(full_prompt, max_tokens=64, temperature=0.7)
+        raw_output = self._call_llm(full_prompt, max_tokens=64, temperature=0.7)
+
+        if "Answer:" in raw_output:
+            answer_part = raw_output.split("Answer:", 1)[1].strip()
+        else:
+            answer_part = raw_output.strip()
+
+        return answer_part
 
     def parse_intent(self, user_input):
         text = user_input.lower().strip()
@@ -105,17 +115,27 @@ class LanguageSystem:
             return {"type": "MEMORY_READ", "content": user_input}
         else:
             return {"type": "CHAT", "content": user_input}
+
     def rewrite_from_sources(self, question, raw_summary, source_label):
+        """
+        Rewrite retrieved text (Wikipedia/RSS/local corpus/live tools) in Adaptheon's voice.
+        Uses local Qwen model when available and returns only the final answer text.
+        """
         if not self.use_llm:
             base = "Here is a concise explanation of '{}', based on {}: ".format(question, source_label)
             return base + raw_summary
 
-        header = "You are Adaptheon's language cortex. Explain things clearly and briefly using only the given source text."
-        line_q = "Question: " + question
-        line_src_label = "Source label: " + str(source_label)
-        line_src_text = "Source text: " + raw_summary
-        task = "Task: Rewrite the source text into a clear, natural answer to the question. Be concise, accurate, and avoid strange symbols or citation markers."
+        prompt = "Source text: " + raw_summary + " Question: " + question + " Instruction: Answer the question clearly and naturally in at most 2 sentences. Do not repeat the instructions or metadata. Only output the answer text. Answer:"
 
-        prompt = header + " " + line_q + " " + line_src_label + " " + line_src_text + " " + task
+        raw_output = self._call_llm(prompt, max_tokens=80, temperature=0.5)
 
-        return self._call_llm(prompt, max_tokens=80, temperature=0.5)
+        if "Answer:" in raw_output:
+            answer_part = raw_output.split("Answer:", 1)[1].strip()
+        else:
+            answer_part = raw_output.strip()
+
+        if "Source text:" in answer_part:
+            idx = answer_part.rfind("Source text:")
+            answer_part = answer_part[idx + len("Source text:"):].strip()
+
+        return answer_part
