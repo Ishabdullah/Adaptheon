@@ -6,6 +6,7 @@ from components.domain_router import DomainRouter
 from components.fetchers.sports_fetcher import SportsFetcher
 from components.fetchers.science_fetcher import ScienceFetcher
 from components.fetchers.books_fetcher import BooksFetcher
+from components.fetchers.media_fetcher import MediaFetcher
 from knowledge_scout.truth_types import (
     TruthResult,
     SourceTier,
@@ -22,8 +23,8 @@ class KnowledgeScout:
     """
     Truth engine / curiosity engine.
     Tiered, structured retrieval with Wikidata as primary, Wikipedia/RSS/Local as fallbacks.
-    Domain-aware via DomainRouter, with domain-specific fast paths (sports, science, books) and
-    a guard against hallucinated sports winners.
+    Domain-aware via DomainRouter, with domain-specific fast paths (sports, science, books, media)
+    and a guard against hallucinated sports winners.
     """
 
     def __init__(self):
@@ -35,6 +36,7 @@ class KnowledgeScout:
         self.sports = SportsFetcher()
         self.science = ScienceFetcher()
         self.books = BooksFetcher()
+        self.media = MediaFetcher()
         self.wikidata = WikidataClient()
         self.wikipedia = WikipediaFetcher()
         self.rss = RSSFetcher()
@@ -145,7 +147,7 @@ class KnowledgeScout:
         if domain:
             _ = self.domain_router.get_sources(domain)
 
-        # Sports domain fast path
+        # Sports fast path
         if domain == "sports" and query_type == "sports_result":
             sports_res = self.sports.fetch_result(query)
             if sports_res.get("status") == "FOUND":
@@ -239,6 +241,41 @@ class KnowledgeScout:
                     ],
                     violations=[],
                     metadata=book_res.get("metadata", {}),
+                )
+                self._to_cache(tr)
+                return {
+                    "status": tr.status,
+                    "summary": tr.canonical_summary,
+                    "source": tr.primary_source.value,
+                    "confidence": tr.confidence,
+                    "url": tr.metadata.get("url"),
+                    "truth_result": tr,
+                }
+
+        # Media/entertainment fast path
+        if domain == "media_entertainment" and query_type == "media_info":
+            media_res = self.media.fetch(query)
+            if media_res.get("status") == "FOUND":
+                tr = TruthResult(
+                    status="FOUND",
+                    query=query,
+                    canonical_summary=media_res["summary"],
+                    confidence=media_res.get("confidence", 0.85),
+                    primary_source=SourceKind.OTHER,
+                    tier=SourceTier.PRIMARY,
+                    snippets=[media_res["summary"]],
+                    source_trace=[
+                        SourceTraceEntry(
+                            tier=SourceTier.PRIMARY,
+                            kind=SourceKind.OTHER,
+                            name="MediaAPI",
+                            url=media_res.get("url"),
+                            confidence=media_res.get("confidence", 0.85),
+                            note="TMDB/TVMaze media stack",
+                        )
+                    ],
+                    violations=[],
+                    metadata=media_res.get("metadata", {}),
                 )
                 self._to_cache(tr)
                 return {
