@@ -1,2 +1,3 @@
 requests
 SPARQLWrapper
+qdrant-client[fastembed]
