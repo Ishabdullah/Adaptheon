@@ -10,9 +10,10 @@ from components.time_service import get_now
 from components.price_service import PriceService
 from components.weather_service import WeatherService
 from components.location_service import LocationService
+from components.tool_registry import Tool, ToolRegistry
 from components.embedding_store import EmbeddingStore
 from components.graph_memory import GraphMemory
-from components.tool_registry import Tool, ToolRegistry
+from components.identity.identity_module import IdentityModule
 
 
 class MetaCognitiveCore:
@@ -27,6 +28,7 @@ class MetaCognitiveCore:
         self.location_service = LocationService()
         self.vector_store = EmbeddingStore()
         self.graph_memory = GraphMemory()
+        self.identity = IdentityModule(self.llm)
         self.tools = ToolRegistry()
         self._register_tools()
         self.last_topic = None
@@ -38,6 +40,7 @@ class MetaCognitiveCore:
         """
         Register core tools/modules for Meta-Cortex routing.
         """
+        # Language generation tool
         self.tools.register(
             Tool(
                 name="llm_generate",
@@ -48,6 +51,7 @@ class MetaCognitiveCore:
             )
         )
 
+        # Knowledge Scout tool
         self.tools.register(
             Tool(
                 name="scout_search",
@@ -58,6 +62,7 @@ class MetaCognitiveCore:
             )
         )
 
+        # Live price tool
         self.tools.register(
             Tool(
                 name="price_query",
@@ -66,6 +71,7 @@ class MetaCognitiveCore:
             )
         )
 
+        # Live weather tool
         self.tools.register(
             Tool(
                 name="weather_current",
@@ -76,6 +82,7 @@ class MetaCognitiveCore:
             )
         )
 
+        # Location tool
         self.tools.register(
             Tool(
                 name="location_details",
@@ -83,6 +90,7 @@ class MetaCognitiveCore:
                 func=lambda: self.location_service.get_location_details(),
             )
         )
+
     def _lookup_semantic(self, topic):
         key = "knowledge_{}".format(topic.replace(" ", "_"))
         semantic = self.memory.layers.get("semantic", {})
@@ -147,6 +155,13 @@ class MetaCognitiveCore:
         return None
 
     def run_cycle(self, user_input):
+        # Identity module: handle core "who/what are you" style questions first
+        ident = self.identity.handle(user_input)
+        if ident.get("handled"):
+            final = ident.get("response", "")
+            self.memory.add_episodic(user_input, final)
+            return final
+
         intent = self.llm.parse_intent(user_input)
         context = self.memory.get_context()
         logic_output = self.hrm.process(intent, context)
@@ -237,7 +252,6 @@ class MetaCognitiveCore:
                     raw_summary=summary,
                     source_label=source
                 )
-                # Return only the rewritten answer, no extra suggestions
                 final_response = rewritten
                 self.last_topic = topic
                 self.last_summary = summary
