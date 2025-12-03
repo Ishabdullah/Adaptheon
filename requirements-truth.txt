@@ -1,3 +1,5 @@
 requests
-SPARQLWrapper
-qdrant-client[fastembed]
+python-dotenv
+yfinance
+pycoingecko
+feedparser
