@@ -7,6 +7,7 @@ from components.fetchers.sports_fetcher import SportsFetcher
 from components.fetchers.science_fetcher import ScienceFetcher
 from components.fetchers.books_fetcher import BooksFetcher
 from components.fetchers.media_fetcher import MediaFetcher
+from components.fetchers.music_fetcher import MusicFetcher
 from knowledge_scout.truth_types import (
     TruthResult,
     SourceTier,
@@ -23,7 +24,7 @@ class KnowledgeScout:
     """
     Truth engine / curiosity engine.
     Tiered, structured retrieval with Wikidata as primary, Wikipedia/RSS/Local as fallbacks.
-    Domain-aware via DomainRouter, with domain-specific fast paths (sports, science, books, media)
+    Domain-aware via DomainRouter, with domain-specific fast paths (sports, science, books, media, music)
     and a guard against hallucinated sports winners.
     """
 
@@ -37,6 +38,7 @@ class KnowledgeScout:
         self.science = ScienceFetcher()
         self.books = BooksFetcher()
         self.media = MediaFetcher()
+        self.music = MusicFetcher()
         self.wikidata = WikidataClient()
         self.wikipedia = WikipediaFetcher()
         self.rss = RSSFetcher()
@@ -276,6 +278,41 @@ class KnowledgeScout:
                     ],
                     violations=[],
                     metadata=media_res.get("metadata", {}),
+                )
+                self._to_cache(tr)
+                return {
+                    "status": tr.status,
+                    "summary": tr.canonical_summary,
+                    "source": tr.primary_source.value,
+                    "confidence": tr.confidence,
+                    "url": tr.metadata.get("url"),
+                    "truth_result": tr,
+                }
+
+        # Music fast path
+        if domain == "music" and query_type == "music_info":
+            music_res = self.music.fetch(query)
+            if music_res.get("status") == "FOUND":
+                tr = TruthResult(
+                    status="FOUND",
+                    query=query,
+                    canonical_summary=music_res["summary"],
+                    confidence=music_res.get("confidence", 0.86),
+                    primary_source=SourceKind.OTHER,
+                    tier=SourceTier.PRIMARY,
+                    snippets=[music_res["summary"]],
+                    source_trace=[
+                        SourceTraceEntry(
+                            tier=SourceTier.PRIMARY,
+                            kind=SourceKind.OTHER,
+                            name="MusicAPI",
+                            url=music_res.get("url"),
+                            confidence=music_res.get("confidence", 0.86),
+                            note="MusicBrainz music stack",
+                        )
+                    ],
+                    violations=[],
+                    metadata=music_res.get("metadata", {}),
                 )
                 self._to_cache(tr)
                 return {
