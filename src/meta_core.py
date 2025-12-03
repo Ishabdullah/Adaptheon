@@ -166,6 +166,14 @@ class MetaCognitiveCore:
             steps_text = " | ".join(steps)
             final_response = logic_output["response"] + " | Steps: " + steps_text
 
+        elif action == "GET_USER_NAME":
+            prefs = self.memory.layers.get("user_preferences", {})
+            name = prefs.get("user_name")
+            if name:
+                final_response = "Your name is {}.".format(name)
+            else:
+                final_response = "I do not know your name yet. You can tell me by saying, for example, 'remember my name is Ish'."
+
         elif action == "RETRIEVE":
             final_response = logic_output["response"]
 
