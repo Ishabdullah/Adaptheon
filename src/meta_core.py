@@ -36,10 +36,11 @@ class MetaCognitiveCore:
         self.last_source = None
         print("[SYSTEM] All Cognitive Modules Online.")
 
-    # _register_tools, _lookup_semantic, _related_topics, _build_memory_context, _log_dispute, _select_policy_for_query
-    # are unchanged from previous step – they stay as in Step 40.
-
     def _register_tools(self):
+        """
+        Register core tools/modules for Meta-Cortex routing.
+        """
+        # Language generation tool
         self.tools.register(
             Tool(
                 name="llm_generate",
@@ -50,6 +51,7 @@ class MetaCognitiveCore:
             )
         )
 
+        # Knowledge Scout tool (domain-aware)
         self.tools.register(
             Tool(
                 name="scout_search",
@@ -60,6 +62,7 @@ class MetaCognitiveCore:
             )
         )
 
+        # Live price tool
         self.tools.register(
             Tool(
                 name="price_query",
@@ -68,6 +71,7 @@ class MetaCognitiveCore:
             )
         )
 
+        # Live weather tool
         self.tools.register(
             Tool(
                 name="weather_current",
@@ -78,6 +82,7 @@ class MetaCognitiveCore:
             )
         )
 
+        # Location tool
         self.tools.register(
             Tool(
                 name="location_details",
@@ -115,7 +120,12 @@ class MetaCognitiveCore:
         return " You might also ask about: " + ", ".join(top) + "."
 
     def _build_memory_context(self, topic: str) -> str:
+        """
+        Build a compact text context from vector and graph memories for RAG-style conditioning.
+        """
         parts = []
+
+        # Vector memory: top-k similar docs by topic string
         try:
             vec_hits = self.vector_store.query(topic, top_k=3, min_score=0.2)
         except Exception:
@@ -131,6 +141,7 @@ class MetaCognitiveCore:
 " + "
 ".join(vs))
 
+        # Graph memory: 1-hop neighborhood around topic
         try:
             neigh = self.graph_memory.neighborhood(topic, max_hops=1)
         except Exception:
@@ -190,6 +201,7 @@ class MetaCognitiveCore:
         return None
 
     def run_cycle(self, user_input):
+        # Identity module: handle core "who/what are you" style questions first
         ident = self.identity.handle(user_input)
         if ident.get("handled"):
             final = ident.get("response", "")
@@ -203,10 +215,160 @@ class MetaCognitiveCore:
         action = logic_output.get("action")
         final_response = ""
 
-        # ... CHAT, PRICE_QUERY, WEATHER_QUERY, RETURN_KNOWLEDGE, TRIGGER_SCOUT branches unchanged
-        # except for the VERIFY_AND_UPDATE block, which becomes memory-aware below.
+        if action == "SAVE_PREFERENCE":
+            self.memory.update_preference(
+                logic_output["key"],
+                logic_output["value"]
+            )
+            final_response = logic_output["response"]
 
-        if action == "VERIFY_AND_UPDATE":
+        elif action == "EXECUTE_PLAN":
+            steps = logic_output.get("plan_steps", [])
+            steps_text = " | ".join(steps)
+            final_response = logic_output["response"] + " | Steps: " + steps_text
+
+        elif action == "GET_USER_NAME":
+            prefs = self.memory.layers.get("user_preferences", {})
+            name = prefs.get("user_name")
+            if name:
+                final_response = "Your name is {}.".format(name)
+            else:
+                final_response = "I do not know your name yet. You can tell me by saying, for example, 'remember my name is Ish'."
+
+        elif action == "RETRIEVE":
+            final_response = logic_output["response"]
+
+        elif action == "PRICE_QUERY":
+            asset = logic_output.get("asset", "").strip()
+            price_data = self.tools.invoke("price_query", asset=asset)
+            if not price_data:
+                final_response = "I could not fetch a reliable live price for {} right now.".format(asset)
+            else:
+                summary = "As of {} {} UTC, the price of {} is approximately {} US dollars.".format(
+                    price_data["as_of_date"],
+                    price_data["as_of_time"],
+                    asset,
+                    price_data["price_usd"],
+                )
+                rewritten = self.llm.rewrite_from_sources(
+                    question="current price of " + asset,
+                    raw_summary=summary,
+                    source_label="live_price"
+                )
+                final_response = rewritten
+
+        elif action == "WEATHER_QUERY":
+            loc = self.tools.invoke("location_details")
+            if loc:
+                lat = loc["latitude"]
+                lon = loc["longitude"]
+                place = loc.get("label", "your area")
+                weather = self.tools.invoke("weather_current", latitude=lat, longitude=lon)
+            else:
+                place = "your area"
+                weather = self.tools.invoke("weather_current")
+
+            if not weather:
+                final_response = "I could not fetch reliable weather data right now."
+            else:
+                summary = "As of {} {} at {}, the temperature is {:.1f} degrees Fahrenheit with wind speed {:.1f} miles per hour.".format(
+                    weather["as_of_date"],
+                    weather["as_of_time"],
+                    place,
+                    weather["temperature_f"],
+                    weather["windspeed_mph"],
+                )
+                rewritten = self.llm.rewrite_from_sources(
+                    question="current weather",
+                    raw_summary=summary,
+                    source_label="live_weather"
+                )
+                final_response = rewritten
+
+        elif action == "RETURN_KNOWLEDGE":
+            topic = logic_output.get("topic", "").strip()
+            key, fact = self._lookup_semantic(topic)
+            if fact is None:
+                final_response = "I thought I knew about '{}', but I cannot find it in memory yet.".format(topic)
+            else:
+                base_summary = fact.get("summary", "")
+                source = fact.get("metadata", {}).get("source", "memory")
+                mem_ctx = self._build_memory_context(topic)
+                combined = base_summary
+                if mem_ctx:
+                    combined = mem_ctx + "
+
+Primary fact:
+" + base_summary
+                rewritten = self.llm.rewrite_from_sources(
+                    question=topic,
+                    raw_summary=combined,
+                    source_label=source
+                )
+                final_response = rewritten
+                self.last_topic = topic
+                self.last_summary = base_summary
+                self.last_source = source
+
+        elif action == "TRIGGER_SCOUT":
+            topic = logic_output["topic"]
+            time_sensitive = bool(logic_output.get("time_sensitive", False))
+            print("[Meta-Core] Unknown topic '{}', launching Scout...".format(topic))
+            policy = self._select_policy_for_query(topic)
+            scout_result = self.tools.invoke(
+                "scout_search",
+                query=topic,
+                policy=policy,
+                ignore_cache=time_sensitive,
+                domain=logic_output.get("domain"),
+                query_type=logic_output.get("query_type"),
+            )
+            if scout_result["status"] == "FOUND":
+                key = "knowledge_{}".format(topic.replace(" ", "_"))
+                metadata = {
+                    "source": scout_result["source"],
+                    "confidence": scout_result["confidence"],
+                    "url": scout_result.get("url"),
+                    "tier": scout_result.get("truth_result").tier.value if scout_result.get("truth_result") else None,
+                }
+                if hasattr(self.memory, "add_semantic"):
+                    self.memory.add_semantic(key, scout_result["summary"], metadata)
+                # Store in vector memory for future semantic search
+                try:
+                    self.vector_store.add_document(
+                        doc_id=key,
+                        text=scout_result["summary"],
+                        metadata={"topic": topic, "source": scout_result["source"]}
+                    )
+                except Exception:
+                    pass
+                # Store in graph memory as topic -> primary source/entity
+                try:
+                    self.graph_memory.upsert_entity_from_truth(topic, scout_result)
+                except Exception:
+                    pass
+
+                mem_ctx = self._build_memory_context(topic)
+                combined = scout_result["summary"]
+                if mem_ctx:
+                    combined = mem_ctx + "
+
+External summary:
+" + scout_result["summary"]
+
+                rewritten = self.llm.rewrite_from_sources(
+                    question=topic,
+                    raw_summary=combined,
+                    source_label=scout_result["source"]
+                )
+                final_response = rewritten
+                self.last_topic = topic
+                self.last_summary = scout_result["summary"]
+                self.last_source = scout_result["source"]
+            else:
+                final_response = scout_result["summary"]
+
+        elif action == "VERIFY_AND_UPDATE":
             topic = logic_output.get("topic")
             user_corr = logic_output.get("user_correction", "")
             if not topic and self.last_topic:
@@ -219,7 +381,7 @@ class MetaCognitiveCore:
                 key, old_fact = self._lookup_semantic(topic)
                 policy = self._select_policy_for_query(topic)
 
-                # 1) External check via Scout (fresh truth search)[web:669][web:677]
+                # 1) External check via Scout (fresh truth search)
                 scout_result = self.tools.invoke(
                     "scout_search",
                     query=topic,
@@ -235,7 +397,7 @@ class MetaCognitiveCore:
                 self._log_dispute(topic, user_corr, old_fact, scout_result)
 
                 if scout_result["status"] == "FOUND":
-                    # Combine external + memory evidence into a single payload for the LLM
+                    # Combine external + memory evidence into a single payload for the LLM (lightweight corrective-RAG).[web:669][web:670]
                     evidence_chunks = []
                     if mem_ctx:
                         evidence_chunks.append(mem_ctx)
@@ -249,7 +411,6 @@ class MetaCognitiveCore:
 
 ".join(evidence_chunks)
 
-                    # Ask LLM to decide whether the correction is supported, refuted, or uncertain (lightweight CRAG).[web:670][web:681]
                     verdict = self.llm.rewrite_from_sources(
                         question=f"Evaluate this user correction about '{topic}': {user_corr}",
                         raw_summary=combined_evidence,
@@ -265,7 +426,7 @@ class MetaCognitiveCore:
                         "last_correction_verdict": verdict,
                     }
 
-                    # For now, always update to the Scout version; verdict is stored for inspection
+                    # For now, update to the Scout version; verdict is stored for later inspection.[web:671][web:681]
                     if old_fact is not None:
                         old_fact["summary"] = scout_result["summary"]
                         old_meta = old_fact.get("metadata", {})
@@ -284,7 +445,7 @@ class MetaCognitiveCore:
 
                     final_response = (
                         "Thanks for the correction. Based on my re-check of external sources and my own memory, "
-                        "I have updated what I know about '{}' and recorded a verification verdict.".format(topic)
+                        "I have updated what I know about '{}' and recorded an internal verification note.".format(topic)
                     )
                 else:
                     final_response = (
@@ -292,12 +453,30 @@ class MetaCognitiveCore:
                         "I will treat this as an open question.".format(topic)
                     )
 
-        # ... other actions (SAVE_PREFERENCE, EXECUTE_PLAN, GET_USER_NAME, etc.) remain as in Step 40
+        elif action == "UPDATE_SEARCH_POLICY":
+            instr = logic_output.get("instruction", "")
+            text = instr.lower()
+            if "current price" in text or "price of" in text:
+                pattern = "current price of"
+                rules = {
+                    "require_numeric": True,
+                    "prefer_source": ["local_rss"],
+                }
+                self.memory.add_search_policy(pattern, rules)
+                final_response = "Understood. I will adjust how I search for current prices to focus on numeric information and relevant feeds."
+            else:
+                pattern = "what is"
+                rules = {}
+                self.memory.add_search_policy(pattern, rules)
+                final_response = "I have recorded your search preference and will use it in future lookups."
 
-        elif action not in ("VERIFY_AND_UPDATE",):
-            # fall back to the existing branches (omitted here for brevity)
-            # In your local file, keep the existing implementations from Step 40.
-            pass
+        else:
+            # Default: generic chat via LLM tool
+            final_response = self.tools.invoke(
+                "llm_generate",
+                prompt=user_input,
+                system_instruction=None
+            )
 
         self.memory.add_episodic(user_input, final_response)
         return final_response
