@@ -9,14 +9,12 @@ def main():
     print(fin.fetch("AAPL"))
     print(fin.fetch("bitcoin"))
 
-    print("
-=== WeatherFetcher test ===")
+    print("=== WeatherFetcher test ===")
     # Example: near Wethersfield, CT
     w = WeatherFetcher()
     print(w.fetch("41.71,-72.65"))
 
-    print("
-=== RSSFetcher test ===")
+    print("=== RSSFetcher test ===")
     rss = RSSFetcher(
         feeds=[
             "https://www.reuters.com/rssFeed/worldNews",
