@@ -3,6 +3,7 @@ import json
 from typing import Optional, Dict, Any, List
 
 from components.domain_router import DomainRouter
+from components.fetchers.sports_fetcher import SportsFetcher
 from knowledge_scout.truth_types import (
     TruthResult,
     SourceTier,
@@ -19,7 +20,7 @@ class KnowledgeScout:
     """
     Truth engine / curiosity engine.
     Tiered, structured retrieval with Wikidata as primary, Wikipedia/RSS/Local as fallbacks.
-    Now domain-aware via DomainRouter, with sports guard against hallucinated winners.
+    Domain-aware via DomainRouter, with a sports fast path and a guard against hallucinated winners.
     """
 
     def __init__(self):
@@ -28,6 +29,7 @@ class KnowledgeScout:
         self.unknowns_path = "data/cache/unknowns.json"
         self._load_cache()
         self.domain_router = DomainRouter()
+        self.sports = SportsFetcher()
         self.wikidata = WikidataClient()
         self.wikipedia = WikipediaFetcher()
         self.rss = RSSFetcher()
@@ -131,13 +133,48 @@ class KnowledgeScout:
     ) -> Dict[str, Any]:
         """
         Domain-aware search over primary/secondary/tertiary knowledge sources.
-        For now, domain is used mainly for logging and future specialization.
+        'domain' and 'query_type' are hints from HRM/DomainRouter.
         """
         q_key = query.strip().lower()
 
-        # Domain sources (currently informational; specialized fetchers will use this later)
+        # Domain info is currently advisory; specialized stacks will be plugged in per-domain.
         if domain:
             _ = self.domain_router.get_sources(domain)
+
+        # Sports domain fast path: use SportsFetcher first for sports_result queries
+        if domain == "sports" and query_type == "sports_result":
+            sports_res = self.sports.fetch_result(query)
+            if sports_res.get("status") == "FOUND":
+                tr = TruthResult(
+                    status="FOUND",
+                    query=query,
+                    canonical_summary=sports_res["summary"],
+                    confidence=sports_res.get("confidence", 0.88),
+                    primary_source=SourceKind.OTHER,
+                    tier=SourceTier.PRIMARY,
+                    snippets=[sports_res["summary"]],
+                    source_trace=[
+                        SourceTraceEntry(
+                            tier=SourceTier.PRIMARY,
+                            kind=SourceKind.OTHER,
+                            name="SportsAPI",
+                            url=sports_res.get("url"),
+                            confidence=sports_res.get("confidence", 0.88),
+                            note="ESPN/TheSportsDB sports result stack",
+                        )
+                    ],
+                    violations=[],
+                    metadata=sports_res.get("metadata", {}),
+                )
+                self._to_cache(tr)
+                return {
+                    "status": tr.status,
+                    "summary": tr.canonical_summary,
+                    "source": tr.primary_source.value,
+                    "confidence": tr.confidence,
+                    "url": tr.metadata.get("url"),
+                    "truth_result": tr,
+                }
 
         if not ignore_cache:
             cached = self._from_cache(q_key)
