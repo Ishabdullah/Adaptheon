@@ -18,9 +18,9 @@ class WikipediaFetcher(BaseFetcher):
 
     def _clean_text(self, text: str, max_len: int = 400) -> str:
         # Remove citation markers like [1], [2]
-        text = re.sub(r"[d+]", "", text)
+        text = re.sub(r"\[\d+\]", "", text)
         # Collapse whitespace
-        text = re.sub(r"s+", " ", text)
+        text = re.sub(r"\s+", " ", text)
         # Keep only basic ASCII (letters, digits, punctuation, spaces)
         text = "".join(ch for ch in text if ch in string.printable)
         text = text.strip()

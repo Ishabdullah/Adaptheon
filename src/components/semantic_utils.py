@@ -2,7 +2,7 @@ import math
 import re
 from collections import Counter
 
-WORD_RE = re.compile(r"w+")
+WORD_RE = re.compile(r"\w+")
 
 def tokenize(text):
     return WORD_RE.findall(text.lower())

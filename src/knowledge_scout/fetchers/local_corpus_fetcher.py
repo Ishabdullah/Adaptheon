@@ -3,7 +3,7 @@ import re
 from typing import Optional
 from .base import BaseFetcher, FetchResult, FetchSource
 
-WORD_RE = re.compile(r"w+")
+WORD_RE = re.compile(r"\w+")
 
 class LocalCorpusFetcher(BaseFetcher):
     """
