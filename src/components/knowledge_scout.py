@@ -1,26 +1,24 @@
 import os
 import json
 
-from knowledge_scout.fetchers.base import FetchSource
-from knowledge_scout.fetchers.wikipedia_fetcher import WikipediaFetcher
-from knowledge_scout.fetchers.rss_fetcher import RSSFetcher
-from knowledge_scout.fetchers.local_corpus_fetcher import LocalCorpusFetcher
+from components.fetchers.fetcher_registry import FetcherRegistry
+from components.fetchers.base_fetcher import FetchStatus
 
 
 class KnowledgeScout:
     """
-    Curiosity engine.
-    Uses cache + local corpus + web sources (Wikipedia, RSS)
+    Curiosity engine - Enhanced with Production-Grade Fetchers.
+    Uses cache + comprehensive domain-specific fetchers
     to fill in missing knowledge and feed semantic memory.
     """
 
     def __init__(self):
-        print("  [Scout] Initializing fetcher layers...")
+        print("  [Scout] Initializing production-grade fetcher registry...")
         self.cache_path = "data/cache/knowledge_cache.json"
         self._load_cache()
-        self.wikipedia = WikipediaFetcher()
-        self.rss = RSSFetcher()
-        self.local_corpus = LocalCorpusFetcher()
+        # Use the new FetcherRegistry with 24+ domain-specific fetchers
+        self.registry = FetcherRegistry()
+        print(f"  [Scout] {self.registry.get_stats()['total_fetchers']} fetchers registered")
 
     def _load_cache(self):
         os.makedirs("data/cache", exist_ok=True)
@@ -38,8 +36,13 @@ class KnowledgeScout:
             json.dump(self.cache, f, indent=2)
 
     def search(self, query: str, policy: dict = None):
+        """
+        Search for knowledge using intelligent fetcher routing.
+        Returns best result from cache or production-grade fetchers.
+        """
         q_key = query.strip().lower()
 
+        # Check cache first
         if q_key in self.cache:
             print("    [Cache] ✓ Hit: '{}'".format(q_key))
             entry = self.cache[q_key]
@@ -52,25 +55,28 @@ class KnowledgeScout:
             }
 
         print("    [Cache] ✗ Miss: '{}'".format(q_key))
+        print(f"    [Scout] Routing query to specialized fetchers...")
 
-        local_result = self.local_corpus.fetch(query)
-        wiki_result = self.wikipedia.fetch(query)
-        rss_result = self.rss.fetch(query)
+        # Use FetcherRegistry to intelligently route and fetch
+        # Registry returns up to 3 most relevant fetchers
+        max_fetchers = 3
+        if policy and policy.get("max_fetchers"):
+            max_fetchers = policy["max_fetchers"]
 
-        candidates = [r for r in [local_result, wiki_result, rss_result] if r is not None]
+        results = self.registry.fetch(query, max_fetchers=max_fetchers)
 
-        # Apply simple policy filters before scoring
-        if policy:
-            require_numeric = bool(policy.get("require_numeric", False))
-            if require_numeric:
-                filtered = []
-                for r in candidates:
-                    if any(ch.isdigit() for ch in r.summary):
-                        filtered.append(r)
-                if filtered:
-                    candidates = filtered
+        # Filter by policy if specified
+        if policy and policy.get("require_numeric"):
+            results = [r for r in results if any(ch.isdigit() for ch in r.summary)]
 
-        if not candidates:
+        # Apply source preference bonus
+        if policy and policy.get("prefer_source"):
+            preferred = policy["prefer_source"]
+            for result in results:
+                if result.source in preferred:
+                    result.confidence += 0.1
+
+        if not results:
             self.cache[q_key] = {
                 "summary": "I could not find reliable information about '{}' yet.".format(query),
                 "source": "none",
@@ -86,35 +92,24 @@ class KnowledgeScout:
                 "url": None,
             }
 
-        def score(r):
-            bonus = 0.0
-            # Prefer local corpus slightly
-            if r.source == FetchSource.LOCAL_CORPUS:
-                bonus += 0.05
-            # Policy-based source preference
-            if policy:
-                prefer_src = policy.get("prefer_source")
-                if prefer_src and isinstance(prefer_src, list):
-                    src_val = r.source.value if hasattr(r.source, "value") else str(r.source)
-                    if src_val in prefer_src:
-                        bonus += 0.1
-            return r.confidence + bonus
+        # Get best result (already sorted by confidence in registry)
+        best = results[0]
 
-        best = sorted(candidates, key=score, reverse=True)[0]
-        source_value = best.source.value if hasattr(best.source, "value") else str(best.source)
-
+        # Cache the result
         self.cache[q_key] = {
             "summary": best.summary,
-            "source": source_value,
+            "source": best.source,
             "confidence": best.confidence,
             "url": best.url,
         }
         self._save_cache()
 
+        print(f"    [Scout] ✓ Found via {best.source} (confidence: {best.confidence:.2f})")
+
         return {
             "status": "FOUND",
             "summary": best.summary,
-            "source": source_value,
+            "source": best.source,
             "confidence": best.confidence,
             "url": best.url,
         }

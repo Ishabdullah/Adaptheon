@@ -264,6 +264,10 @@ class MetaCognitiveCore:
                 self.memory.add_search_policy(pattern, rules)
                 final_response = "I have recorded your search preference and will use it in future lookups."
 
+        elif action == "IDENTITY_RESPONSE":
+            # Identity questions handled directly by HRM
+            final_response = logic_output.get("response", "I am Adaptheon.")
+
         else:
             final_response = self.llm.generate(user_input)
 

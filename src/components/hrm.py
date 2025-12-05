@@ -19,7 +19,11 @@ class HierarchicalReasoningMachine:
 
         text_lower = content.lower()
 
-        # Typed queries first
+        # Identity questions - handle first
+        if self._is_identity_question(text_lower):
+            return self._handle_identity(text_lower)
+
+        # Typed queries
         if "current price of" in text_lower or "price of" in text_lower:
             # crude asset extraction: after "price of"
             raw = text_lower
@@ -122,4 +126,74 @@ class HierarchicalReasoningMachine:
             "action": "EXECUTE_PLAN",
             "plan_steps": steps,
             "response": "I have constructed a basic plan for this task.",
+        }
+
+    def _is_identity_question(self, text: str) -> bool:
+        """Check if query is asking about Adaptheon's identity"""
+        identity_patterns = [
+            "who are you",
+            "what are you",
+            "what can you do",
+            "what do you do",
+            "how do you work",
+            "how does this work",
+            "tell me about yourself",
+            "what is adaptheon",
+            "what's adaptheon",
+        ]
+        return any(pattern in text for pattern in identity_patterns)
+
+    def _handle_identity(self, text: str) -> dict:
+        """Generate natural language response to identity questions"""
+        response = ""
+
+        if "who are you" in text or "what are you" in text or "what is adaptheon" in text or "what's adaptheon" in text:
+            response = (
+                "I am Adaptheon, a modular reasoning system built to explore, learn, and adapt. "
+                "I combine memory systems, knowledge retrieval, and local language models to provide "
+                "contextual, on-device intelligence. My architecture includes episodic memory for conversations, "
+                "semantic memory for facts, and a Knowledge Scout that searches 24+ specialized data sources "
+                "including Wikipedia, arXiv, GitHub, financial markets, weather services, and more."
+            )
+
+        elif "what can you do" in text or "what do you do" in text:
+            response = (
+                "I can help with many tasks: (1) Answer questions by searching specialized knowledge sources, "
+                "(2) Get real-time data like stock prices, cryptocurrency values, and weather, "
+                "(3) Remember our conversations and learn from corrections you provide, "
+                "(4) Search academic papers, GitHub repositories, books, music, sports data, and more, "
+                "(5) Plan multi-step tasks and reason about complex queries, "
+                "(6) Track your preferences and adapt my responses based on what you've taught me. "
+                "I work entirely on your device using local LLMs for privacy."
+            )
+
+        elif "how do you work" in text or "how does this work" in text:
+            response = (
+                "My architecture has several layers: (1) Intent Analysis - I parse your question to understand "
+                "what you're asking, (2) Memory Systems - I check episodic (conversation history), semantic "
+                "(learned facts), and preference layers, (3) Knowledge Scout - Routes queries to 24+ specialized "
+                "fetchers (Wikipedia, arXiv, GitHub, finance APIs, weather, sports, etc.), (4) Reasoning Engine (HRM) - "
+                "Plans multi-step tasks and coordinates responses, (5) Local LLM - Uses Qwen or Gemma models "
+                "running via llama.cpp for natural language generation. Everything runs on-device for privacy."
+            )
+
+        elif "tell me about yourself" in text:
+            response = (
+                "I'm Adaptheon Phase 2.0, an experimental adaptive reasoning system. I was designed to combine "
+                "the best of local AI (privacy, speed) with web-scale knowledge (accuracy, freshness). "
+                "I maintain multiple memory layers, can search dozens of specialized data sources, "
+                "and learn from your corrections. My goal is to be a helpful, transparent AI assistant that "
+                "gets smarter over time by learning from our interactions."
+            )
+
+        else:
+            # Fallback for other identity-related questions
+            response = (
+                "I'm Adaptheon, your on-device AI assistant with access to 24+ knowledge sources "
+                "and multi-layered memory systems."
+            )
+
+        return {
+            "action": "IDENTITY_RESPONSE",
+            "response": response
         }
