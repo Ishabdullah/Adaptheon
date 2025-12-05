@@ -105,12 +105,26 @@ class LanguageSystem:
             return {"type": "MEMORY_READ", "content": user_input}
         else:
             return {"type": "CHAT", "content": user_input}
-    def rewrite_from_sources(self, question, raw_summary, source_label):
+    def rewrite_from_sources(self, question, raw_summary, source_label, temporal_hint=None):
+        """
+        Rewrite raw summary from sources into natural language.
+
+        Args:
+            question: User's original question
+            raw_summary: Raw text from sources
+            source_label: Label indicating source type
+            temporal_hint: Optional temporal awareness hint for time-sensitive queries
+        """
         if not self.use_llm:
             base = "Here is a concise explanation of '{}', based on {}: ".format(question, source_label)
             return base + raw_summary
 
         header = "You are Adaptheon's language cortex. Explain things clearly and briefly using only the given source text."
+
+        # Add temporal hint if provided (for time-sensitive queries)
+        if temporal_hint:
+            header = temporal_hint + " " + header
+
         line_q = "Question: " + question
         line_src_label = "Source label: " + str(source_label)
         line_src_text = "Source text: " + raw_summary

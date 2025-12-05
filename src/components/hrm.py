@@ -1,5 +1,6 @@
 import time
 import string
+from components.temporal_awareness import detect_temporal_intent, should_use_external_sources
 
 
 class HierarchicalReasoningMachine:
@@ -17,13 +18,24 @@ class HierarchicalReasoningMachine:
         content = intent_data["content"]
         print("[HRM] Analyzing Intent: {}".format(intent_type))
 
+        # TEMPORAL AWARENESS: Detect if query is time-sensitive
+        temporal_info = detect_temporal_intent(content)
+        time_sensitive = temporal_info['is_after_cutoff']
+
+        if time_sensitive:
+            print("[HRM] ⏰ Temporal query detected: {}".format(temporal_info['reason']))
+            print("[HRM] ⚠ Query requires external sources (after cutoff {})".format(temporal_info['cutoff_date']))
+
         text_lower = content.lower()
 
         # Identity questions - handle first
         if self._is_identity_question(text_lower):
-            return self._handle_identity(text_lower)
+            result = self._handle_identity(text_lower)
+            result['time_sensitive'] = False  # Identity is static
+            result['temporal_info'] = temporal_info
+            return result
 
-        # Typed queries
+        # Typed queries - these are ALWAYS time-sensitive
         if "current price of" in text_lower or "price of" in text_lower:
             # crude asset extraction: after "price of"
             raw = text_lower
@@ -35,16 +47,23 @@ class HierarchicalReasoningMachine:
             return {
                 "action": "PRICE_QUERY",
                 "asset": asset,
+                "time_sensitive": True,  # Prices are always current
+                "temporal_info": temporal_info,
             }
 
         if "weather" in text_lower:
             return {
                 "action": "WEATHER_QUERY",
                 "location_hint": content,
+                "time_sensitive": True,  # Weather is always current
+                "temporal_info": temporal_info,
             }
 
         if intent_type == "PLANNING":
-            return self._generate_plan(content)
+            result = self._generate_plan(content)
+            result['time_sensitive'] = time_sensitive
+            result['temporal_info'] = temporal_info
+            return result
 
         elif intent_type == "MEMORY_WRITE":
             fact = content.replace("remember", "").strip()
@@ -53,6 +72,8 @@ class HierarchicalReasoningMachine:
                 "key": "user_fact",
                 "value": fact,
                 "response": "I have stored that in your preference memory.",
+                "time_sensitive": False,  # Memory write is not time-sensitive
+                "temporal_info": temporal_info,
             }
 
         elif intent_type == "MEMORY_READ":
@@ -61,6 +82,8 @@ class HierarchicalReasoningMachine:
                 "action": "RETRIEVE",
                 "data": prefs,
                 "response": "Here is what I currently know about you: {}".format(prefs),
+                "time_sensitive": False,  # Memory read is not time-sensitive
+                "temporal_info": temporal_info,
             }
 
         elif "what is" in text_lower or "define" in text_lower:
@@ -73,16 +96,21 @@ class HierarchicalReasoningMachine:
             key = "knowledge_{}".format(topic.replace(" ", "_"))
 
             semantic = memory_context.get("semantic", {})
-            if key in semantic:
+            if key in semantic and not time_sensitive:
+                # Only use cached knowledge if NOT time-sensitive
                 return {
                     "action": "RETURN_KNOWLEDGE",
-                    "topic": topic
+                    "topic": topic,
+                    "time_sensitive": False,
+                    "temporal_info": temporal_info,
                 }
             else:
                 return {
                     "action": "TRIGGER_SCOUT",
                     "topic": topic,
                     "response": "I do not have this in local memory yet. Launching Knowledge Scout.",
+                    "time_sensitive": time_sensitive,
+                    "temporal_info": temporal_info,
                 }
 
         elif intent_type == "CORRECTION":
@@ -100,18 +128,24 @@ class HierarchicalReasoningMachine:
                 "action": "VERIFY_AND_UPDATE",
                 "topic": best_topic,
                 "user_correction": content,
+                "time_sensitive": time_sensitive,
+                "temporal_info": temporal_info,
             }
 
         elif intent_type == "SEARCH_HINT":
             return {
                 "action": "UPDATE_SEARCH_POLICY",
                 "instruction": content,
+                "time_sensitive": False,
+                "temporal_info": temporal_info,
             }
 
         else:
             return {
                 "action": "CONVERSE",
                 "response": "Processing via standard conversational loop.",
+                "time_sensitive": time_sensitive,
+                "temporal_info": temporal_info,
             }
 
     def _generate_plan(self, content):

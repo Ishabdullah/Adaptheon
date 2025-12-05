@@ -35,15 +35,20 @@ class KnowledgeScout:
         with open(self.cache_path, "w") as f:
             json.dump(self.cache, f, indent=2)
 
-    def search(self, query: str, policy: dict = None):
+    def search(self, query: str, policy: dict = None, ignore_cache: bool = False):
         """
         Search for knowledge using intelligent fetcher routing.
         Returns best result from cache or production-grade fetchers.
+
+        Args:
+            query: Search query string
+            policy: Optional search policy with preferences
+            ignore_cache: If True, bypass cache and fetch fresh data (for time-sensitive queries)
         """
         q_key = query.strip().lower()
 
-        # Check cache first
-        if q_key in self.cache:
+        # Check cache first (unless explicitly told to ignore it for time-sensitive queries)
+        if not ignore_cache and q_key in self.cache:
             print("    [Cache] ✓ Hit: '{}'".format(q_key))
             entry = self.cache[q_key]
             return {
@@ -54,7 +59,10 @@ class KnowledgeScout:
                 "url": entry.get("url"),
             }
 
-        print("    [Cache] ✗ Miss: '{}'".format(q_key))
+        if ignore_cache and q_key in self.cache:
+            print("    [Cache] ⏰ Bypassing cache for time-sensitive query: '{}'".format(q_key))
+        else:
+            print("    [Cache] ✗ Miss: '{}'".format(q_key))
         print(f"    [Scout] Routing query to specialized fetchers...")
 
         # Use FetcherRegistry to intelligently route and fetch

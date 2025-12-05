@@ -10,6 +10,7 @@ from components.time_service import get_now
 from components.price_service import PriceService
 from components.weather_service import WeatherService
 from components.location_service import LocationService
+from components.temporal_awareness import get_temporal_system_hint, KNOWLEDGE_CUTOFF
 
 
 class MetaCognitiveCore:
@@ -96,7 +97,14 @@ class MetaCognitiveCore:
         logic_output = self.hrm.process(intent, context)
 
         action = logic_output.get("action")
+        time_sensitive = logic_output.get("time_sensitive", False)
+        temporal_info = logic_output.get("temporal_info", {})
         final_response = ""
+
+        # Log temporal query handling
+        if time_sensitive:
+            print("[Meta-Core] ⏰ Time-sensitive query detected (cutoff: {})".format(KNOWLEDGE_CUTOFF))
+            print("[Meta-Core] ⚠ Will use external sources, not base LLM knowledge")
 
         if action == "SAVE_PREFERENCE":
             self.memory.update_preference(
@@ -125,10 +133,12 @@ class MetaCognitiveCore:
                     asset,
                     price_data["price_usd"],
                 )
+                # Add temporal hint for time-sensitive queries
                 rewritten = self.llm.rewrite_from_sources(
                     question="current price of " + asset,
                     raw_summary=summary,
-                    source_label="live_price"
+                    source_label="live_price",
+                    temporal_hint=get_temporal_system_hint() if time_sensitive else None
                 )
                 final_response = rewritten
 
@@ -153,10 +163,12 @@ class MetaCognitiveCore:
                     weather["temperature_f"],
                     weather["windspeed_mph"],
                 )
+                # Add temporal hint for time-sensitive queries
                 rewritten = self.llm.rewrite_from_sources(
                     question="current weather",
                     raw_summary=summary,
-                    source_label="live_weather"
+                    source_label="live_weather",
+                    temporal_hint=get_temporal_system_hint() if time_sensitive else None
                 )
                 final_response = rewritten
 
@@ -166,23 +178,53 @@ class MetaCognitiveCore:
             if fact is None:
                 final_response = "I thought I knew about '{}', but I cannot find it in memory yet.".format(topic)
             else:
-                summary = fact.get("summary", "")
-                source = fact.get("metadata", {}).get("source", "memory")
-                rewritten = self.llm.rewrite_from_sources(
-                    question=topic,
-                    raw_summary=summary,
-                    source_label=source
-                )
-                final_response = rewritten + self._related_topics(topic, summary)
-                self.last_topic = topic
-                self.last_summary = summary
-                self.last_source = source
+                # If query is time-sensitive but we have cached knowledge, warn and re-scout
+                if time_sensitive:
+                    print("[Meta-Core] ⚠ Cached knowledge exists but query is time-sensitive - re-scouting...")
+                    policy = self._select_policy_for_query(topic)
+                    scout_result = self.scout.search(topic, policy=policy, ignore_cache=True)
+                    if scout_result["status"] == "FOUND":
+                        # Update cache with fresh data
+                        metadata = {
+                            "source": scout_result["source"],
+                            "confidence": scout_result["confidence"],
+                            "url": scout_result.get("url"),
+                            "refreshed_for_temporal": True,
+                        }
+                        if hasattr(self.memory, "add_semantic"):
+                            self.memory.add_semantic(key, scout_result["summary"], metadata)
+                        rewritten = self.llm.rewrite_from_sources(
+                            question=topic,
+                            raw_summary=scout_result["summary"],
+                            source_label=scout_result["source"],
+                            temporal_hint=get_temporal_system_hint()
+                        )
+                        final_response = rewritten
+                        self.last_topic = topic
+                        self.last_summary = scout_result["summary"]
+                        self.last_source = scout_result["source"]
+                    else:
+                        final_response = "This query is time-sensitive, but I could not fetch updated information. Please try again."
+                else:
+                    # Use cached knowledge for non-temporal queries
+                    summary = fact.get("summary", "")
+                    source = fact.get("metadata", {}).get("source", "memory")
+                    rewritten = self.llm.rewrite_from_sources(
+                        question=topic,
+                        raw_summary=summary,
+                        source_label=source
+                    )
+                    final_response = rewritten + self._related_topics(topic, summary)
+                    self.last_topic = topic
+                    self.last_summary = summary
+                    self.last_source = source
 
         elif action == "TRIGGER_SCOUT":
             topic = logic_output["topic"]
             print("[Meta-Core] Unknown topic '{}', launching Scout...".format(topic))
             policy = self._select_policy_for_query(topic)
-            scout_result = self.scout.search(topic, policy=policy)
+            # For time-sensitive queries, skip cache and fetch fresh data
+            scout_result = self.scout.search(topic, policy=policy, ignore_cache=time_sensitive)
             if scout_result["status"] == "FOUND":
                 key = "knowledge_{}".format(topic.replace(" ", "_"))
                 metadata = {
@@ -192,10 +234,12 @@ class MetaCognitiveCore:
                 }
                 if hasattr(self.memory, "add_semantic"):
                     self.memory.add_semantic(key, scout_result["summary"], metadata)
+                # Add temporal hint for time-sensitive queries
                 rewritten = self.llm.rewrite_from_sources(
                     question=topic,
                     raw_summary=scout_result["summary"],
-                    source_label=scout_result["source"]
+                    source_label=scout_result["source"],
+                    temporal_hint=get_temporal_system_hint() if time_sensitive else None
                 )
                 final_response = rewritten
                 self.last_topic = topic
