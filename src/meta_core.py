@@ -313,7 +313,18 @@ class MetaCognitiveCore:
             final_response = logic_output.get("response", "I am Adaptheon.")
 
         else:
-            final_response = self.llm.generate(user_input)
+            # Fallback for unhandled actions (CONVERSE, etc.)
+            # SAFETY CHECK: Never use base LLM for time-sensitive queries
+            if time_sensitive:
+                print("[Meta-Core] ⚠ WARNING: Time-sensitive query reached fallback handler!")
+                print("[Meta-Core] This should have been routed to external sources by HRM.")
+                final_response = (
+                    "I detected this is a time-sensitive query that requires current information, "
+                    "but I'm unable to search for fresh data right now. Please rephrase your "
+                    "question or try again."
+                )
+            else:
+                final_response = self.llm.generate(user_input)
 
         self.memory.add_episodic(user_input, final_response)
         return final_response

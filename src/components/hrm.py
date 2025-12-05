@@ -141,12 +141,30 @@ class HierarchicalReasoningMachine:
             }
 
         else:
-            return {
-                "action": "CONVERSE",
-                "response": "Processing via standard conversational loop.",
-                "time_sensitive": time_sensitive,
-                "temporal_info": temporal_info,
-            }
+            # CRITICAL: If query is time-sensitive but not caught by specific patterns,
+            # trigger scout search to get fresh external data instead of using base LLM
+            if time_sensitive:
+                # Extract a reasonable topic from the query for scout search
+                # Remove common question words to get the core topic
+                topic = content.lower()
+                for word in ["who is", "what is", "who's", "what's", "tell me about", "the current", "current"]:
+                    topic = topic.replace(word, "")
+                topic = topic.strip()
+
+                return {
+                    "action": "TRIGGER_SCOUT",
+                    "topic": topic,
+                    "response": "This query is time-sensitive. Launching Knowledge Scout for fresh data.",
+                    "time_sensitive": True,
+                    "temporal_info": temporal_info,
+                }
+            else:
+                return {
+                    "action": "CONVERSE",
+                    "response": "Processing via standard conversational loop.",
+                    "time_sensitive": False,
+                    "temporal_info": temporal_info,
+                }
 
     def _generate_plan(self, content):
         steps = [
