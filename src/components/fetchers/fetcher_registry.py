@@ -18,6 +18,7 @@ from .coinmarketcap_fetcher import CoinMarketCapFetcher
 from .open_meteo_fetcher import OpenMeteoFetcher
 from .tmdb_fetcher import TMDBFetcher
 from .openlibrary_fetcher import OpenLibraryFetcher
+from .nyt_bestseller_fetcher import NYTBestsellerFetcher
 from .musicbrainz_fetcher import MusicBrainzFetcher
 from .reddit_fetcher import RedditFetcher
 from .newsapi_fetcher import NewsAPIFetcher
@@ -79,6 +80,8 @@ class FetcherRegistry:
                             ['movie', 'film', 'tv show', 'series', 'actor'])
         self.register_fetcher('openlibrary', OpenLibraryFetcher(),
                             ['book', 'author', 'isbn', 'library', 'novel'])
+        self.register_fetcher('nyt_bestseller', NYTBestsellerFetcher(),
+                            ['bestseller', 'best seller', 'nyt', 'new york times', 'top book'])
         self.register_fetcher('musicbrainz', MusicBrainzFetcher(),
                             ['artist', 'album', 'music', 'song', 'band'])
 

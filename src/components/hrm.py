@@ -8,10 +8,159 @@ class HierarchicalReasoningMachine:
     Logic Cortex (Phase 2).
     Handles planning, memory, knowledge, corrections, search hints,
     and typed queries like prices and weather.
+    Enhanced with sports domain detection and identity/status question handling.
     """
 
     def __init__(self):
         pass
+
+    def _is_time_sensitive_identity_question(self, text_lower: str) -> tuple:
+        """
+        Detect questions asking for current identity or status.
+        These are always time-sensitive because the answer changes over time.
+
+        Returns: (bool, str) - (is_identity_question, reason)
+        """
+        # Role/position queries (inherently status-based and time-sensitive)
+        role_keywords = [
+            "quarterback", "qb", "pitcher", "coach", "manager",
+            "ceo", "president", "governor", "mayor",
+            "captain", "leader", "head coach", "starting", "starter"
+        ]
+
+        for role in role_keywords:
+            if role in text_lower:
+                return True, f"role_query:{role}"
+
+        # Present tense identity patterns
+        identity_patterns = [
+            ("who is the current", "present_tense_current"),
+            ("who's the current", "present_tense_current"),
+            ("who are the current", "present_tense_current"),
+            ("what is the current", "present_tense_current"),
+            ("what's the current", "present_tense_current"),
+            ("who is the", "present_tense"),  # "who is the quarterback"
+            ("who's the", "present_tense"),
+            ("what is the latest", "latest_status"),
+            ("what's the latest", "latest_status"),
+            ("who won", "recent_result"),
+            ("what is today's", "today_status"),
+            ("what's today's", "today_status"),
+        ]
+
+        for pattern, reason in identity_patterns:
+            if pattern in text_lower:
+                return True, reason
+
+        # Explicit temporal markers
+        temporal_markers = [
+            "right now", "at this moment", "this year", "this season",
+            "last night", "yesterday", "today", "currently",
+            "as of now", "at the moment"
+        ]
+
+        for marker in temporal_markers:
+            if marker in text_lower:
+                return True, f"temporal_marker:{marker}"
+
+        return False, ""
+
+    def _detect_sports_query(self, text_lower: str) -> tuple:
+        """
+        Detect if a query is about sports and return (is_sports, query_type).
+
+        Returns: (bool, str) - (is_sports, query_type)
+        """
+        # Sports team names (common ones)
+        sports_teams = [
+            "giants", "cowboys", "patriots", "steelers", "packers",
+            "lakers", "celtics", "warriors", "heat", "bulls",
+            "yankees", "red sox", "dodgers", "mets", "cubs",
+            "rangers", "bruins", "blackhawks", "maple leafs",
+        ]
+
+        # Sports keywords and their query types
+        sports_keywords = {
+            "quarterback": "sports_roster",
+            "qb": "sports_roster",
+            "nfl": "sports_result",
+            "nba": "sports_result",
+            "nhl": "sports_result",
+            "mlb": "sports_result",
+            "premier league": "sports_result",
+            "soccer": "sports_result",
+            "football": "sports_result",
+            "basketball": "sports_result",
+            "hockey": "sports_result",
+            "baseball": "sports_result",
+            "game score": "sports_result",
+            "who won": "sports_result",
+            "score of": "sports_result",
+            "last night's game": "sports_result",
+            "today's game": "sports_result",
+            "coach": "sports_roster",
+            "player": "sports_roster",
+            "team": "sports_result",
+            "pitcher": "sports_roster",
+            "goalie": "sports_roster",
+            "starting lineup": "sports_roster",
+        }
+
+        # Check for team names first
+        for team in sports_teams:
+            if team in text_lower:
+                # Determine query type based on context
+                if any(word in text_lower for word in ["who is", "who's", "quarterback", "coach", "player", "roster"]):
+                    return True, "sports_roster"
+                else:
+                    return True, "sports_result"
+
+        # Check for sports keywords
+        for keyword, query_type in sports_keywords.items():
+            if keyword in text_lower:
+                return True, query_type
+
+        return False, None
+
+    def _detect_news_query(self, text_lower: str) -> tuple:
+        """
+        Detect if a query is asking for latest breaking news.
+
+        Returns: (bool, str) - (is_news_query, query_type)
+        """
+        # Generic breaking news patterns (high confidence)
+        generic_news_patterns = [
+            "latest news",
+            "breaking news",
+            "top news",
+            "current news",
+            "whats happening",
+            "what's happening",
+            "recent news",
+            "today's news",
+            "news today",
+            "headlines",
+            "top headlines",
+            "latest headlines",
+        ]
+
+        for pattern in generic_news_patterns:
+            if pattern in text_lower:
+                return True, "news_general"
+
+        # Topic-specific news patterns
+        topic_news_patterns = [
+            "news about",
+            "latest on",
+            "breaking story",
+            "recent developments",
+        ]
+
+        for pattern in topic_news_patterns:
+            if pattern in text_lower:
+                return True, "news_topic"
+
+        return False, None
 
     def process(self, intent_data, memory_context):
         intent_type = intent_data["type"]
@@ -28,7 +177,60 @@ class HierarchicalReasoningMachine:
 
         text_lower = content.lower()
 
-        # Identity questions - handle first
+        # ENHANCED TEMPORAL: Check for identity/status questions (always time-sensitive)
+        is_identity_status, identity_reason = self._is_time_sensitive_identity_question(text_lower)
+        if is_identity_status:
+            time_sensitive = True
+            print("[HRM] 🎯 Identity/status query detected: {}".format(identity_reason))
+
+        # SPORTS DETECTION (HIGH PRIORITY) - route before generic checks
+        is_sports, sports_query_type = self._detect_sports_query(text_lower)
+        if is_sports:
+            print("[HRM] ⚽ Sports query detected: type={}".format(sports_query_type))
+            return {
+                "action": "TRIGGER_SCOUT",
+                "domain": "sports",
+                "query_type": sports_query_type,
+                "time_sensitive": True,
+                "time_sensitive_reason": "sports_always_live",
+                "topic": content.strip(),
+                "temporal_info": temporal_info,
+            }
+
+        # NEWS DETECTION (HIGH PRIORITY) - route breaking news queries
+        is_news, news_query_type = self._detect_news_query(text_lower)
+        if is_news:
+            print("[HRM] 📰 News query detected: type={}".format(news_query_type))
+            return {
+                "action": "TRIGGER_SCOUT",
+                "domain": "news",
+                "query_type": news_query_type,
+                "time_sensitive": True,
+                "time_sensitive_reason": "news_always_current",
+                "topic": content.strip(),
+                "temporal_info": temporal_info,
+            }
+
+        # BESTSELLER DETECTION - route to NYT bestseller lists
+        is_bestseller = any(phrase in text_lower for phrase in [
+            "bestseller", "best seller", "best-seller",
+            "nyt #", "new york times #",
+            "top book", "newest book", "latest book"
+        ])
+
+        if is_bestseller and any(word in text_lower for word in ["nyt", "new york times", "bestseller", "best seller"]):
+            print("[HRM] 📚 Bestseller query detected")
+            return {
+                "action": "TRIGGER_SCOUT",
+                "domain": "bestseller",
+                "query_type": "bestseller_list",
+                "time_sensitive": True,
+                "time_sensitive_reason": "bestseller_lists_update_weekly",
+                "topic": content.strip(),
+                "temporal_info": temporal_info,
+            }
+
+        # Identity questions - handle first (Adaptheon self-identity only)
         if self._is_identity_question(text_lower):
             result = self._handle_identity(text_lower)
             result['time_sensitive'] = False  # Identity is static

@@ -21,11 +21,25 @@ class TheSportsDBFetcher(BaseFetcher):
         try:
             query_lower = query.lower()
 
-            # Free tier search (limited)
-            if "team" in query_lower:
+            # IDENTITY QUERIES: quarterback, coach, pitcher, player, etc.
+            identity_keywords = [
+                "quarterback", "qb", "pitcher", "coach", "manager",
+                "player", "who is", "starting", "starter", "captain"
+            ]
+
+            if any(keyword in query_lower for keyword in identity_keywords):
+                # This is a roster/identity query
+                return self._fetch_roster_info(query)
+
+            # Team searches
+            elif "team" in query_lower:
                 return self._search_team(query)
+
+            # League searches
             elif "league" in query_lower:
                 return self._search_league(query)
+
+            # Default to team search
             else:
                 return self._search_team(query)
 
@@ -104,4 +118,88 @@ class TheSportsDBFetcher(BaseFetcher):
             summary=f"{name} ({sport})",
             confidence=0.75,
             source="thesportsdb"
+        )
+
+    def _fetch_roster_info(self, query: str) -> FetchResult:
+        """
+        Fetch roster/identity information (quarterback, coach, players).
+        Example queries:
+        - "Who is the quarterback for the New York Giants?"
+        - "Who is the coach of the Lakers?"
+        - "Starting pitcher for the Yankees"
+        """
+        query_lower = query.lower()
+
+        # Extract team name from query
+        # Try to identify common team names
+        team_names = [
+            "giants", "cowboys", "patriots", "steelers", "packers",
+            "lakers", "celtics", "warriors", "heat", "bulls",
+            "yankees", "red sox", "dodgers", "mets", "cubs",
+        ]
+
+        team_found = None
+        for team in team_names:
+            if team in query_lower:
+                team_found = team
+                break
+
+        if not team_found:
+            # Try to extract from "for the X" or "of the X" patterns
+            import re
+            match = re.search(r'(?:for|of) (?:the )?([a-z\s]+?)(?:\?|$)', query_lower)
+            if match:
+                team_found = match.group(1).strip()
+
+        if not team_found:
+            return FetchResult(
+                status=FetchStatus.NOT_FOUND,
+                data={},
+                summary="Could not identify team name in query. Please specify the team.",
+                confidence=0.0,
+                source="thesportsdb"
+            )
+
+        # Attempt to get team info
+        url = f"{self.base_url}/1/searchteams.php"
+        params = {'t': team_found}
+
+        data = self._make_request(url, params=params)
+
+        if not data or not data.get('teams'):
+            return FetchResult(
+                status=FetchStatus.NOT_FOUND,
+                data={},
+                summary=f"Could not find roster information for '{team_found}'. "
+                        f"TheSportsDB free tier has limited roster data. "
+                        f"Consider checking ESPN or team official website.",
+                confidence=0.3,
+                source="thesportsdb"
+            )
+
+        team = data['teams'][0]
+        team_name = team.get('strTeam', 'Unknown')
+        league = team.get('strLeague', 'Unknown')
+        sport = team.get('strSport', 'Unknown')
+
+        # Free tier doesn't provide current roster data via API
+        # Return team info with suggestion to check other sources
+        summary = (
+            f"{team_name} ({sport}, {league}). "
+            f"Roster information (quarterbacks, coaches, etc.) requires premium API access "
+            f"or checking ESPN/official team sources for current data."
+        )
+
+        return FetchResult(
+            status=FetchStatus.FOUND,
+            data={
+                "team": team_name,
+                "league": league,
+                "sport": sport,
+                "note": "Roster data requires premium access"
+            },
+            summary=summary,
+            confidence=0.50,  # Lower confidence since we can't answer the specific identity question
+            source="thesportsdb",
+            url=f"https://www.thesportsdb.com/team/{team.get('idTeam', '')}"
         )

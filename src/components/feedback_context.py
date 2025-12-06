@@ -5,7 +5,7 @@ Retrieves relevant feedback and builds context snippets to inject into LLM promp
 """
 
 from typing import List, Optional, Dict, Any
-from feedback_store import FeedbackStore, FeedbackExtraction, FeedbackEvent
+from components.feedback_store import FeedbackStore, FeedbackExtraction, FeedbackEvent
 from components.semantic_utils import text_to_vector, cosine_similarity
 
 

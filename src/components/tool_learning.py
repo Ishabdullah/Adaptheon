@@ -7,7 +7,7 @@ Provides recommendations for when to use specific tools or domain fetchers.
 
 from typing import Dict, List, Optional, Tuple
 from collections import defaultdict, Counter
-from feedback_store import FeedbackStore, FeedbackType, ToolUseEvent
+from components.feedback_store import FeedbackStore, FeedbackType, ToolUseEvent
 
 
 class ToolLearningEngine:

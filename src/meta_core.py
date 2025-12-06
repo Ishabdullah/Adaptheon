@@ -1,5 +1,7 @@
 import os
 import json
+import uuid
+import logging
 
 from components.memory import MemorySystem
 from components.llm_interface import LanguageSystem
@@ -11,11 +13,17 @@ from components.price_service import PriceService
 from components.weather_service import WeatherService
 from components.location_service import LocationService
 from components.temporal_awareness import get_temporal_system_hint, KNOWLEDGE_CUTOFF
+from components.feedback_store import FeedbackStore
+from components.feedback_detector import FeedbackDetector
+from components.feedback_context import get_relevant_feedback, build_feedback_context_snippet
+from components.tool_learning import ToolLearningEngine
 
 
 class MetaCognitiveCore:
     def __init__(self):
         print("[SYSTEM] Booting Adaptheon Phase 2.0...")
+
+        # Core cognitive modules
         self.memory = MemorySystem()
         self.llm = LanguageSystem(model_path=None)
         self.hrm = HierarchicalReasoningMachine()
@@ -23,10 +31,35 @@ class MetaCognitiveCore:
         self.price_service = PriceService()
         self.weather_service = WeatherService()
         self.location_service = LocationService()
+
+        # Feedback and learning system
+        self.feedback_store = FeedbackStore()
+        self.feedback_detector = FeedbackDetector()
+        self.tool_learning = ToolLearningEngine(self.feedback_store)
+
+        # Conversation tracking
+        self.current_conversation = None
+        self.turn_counter = 0
+
+        # Response tracking
         self.last_topic = None
         self.last_summary = None
         self.last_source = None
+
+        # Logging setup
+        os.makedirs("data/logs", exist_ok=True)
+        logging.basicConfig(
+            level=logging.INFO,
+            format='%(asctime)s [%(levelname)s] %(message)s',
+            handlers=[
+                logging.FileHandler('data/logs/adaptheon.log'),
+                logging.StreamHandler()
+            ]
+        )
+        self.logger = logging.getLogger('Adaptheon')
+
         print("[SYSTEM] All Cognitive Modules Online.")
+        print(f"[SYSTEM] Feedback system initialized")
 
     def _lookup_semantic(self, topic):
         key = "knowledge_{}".format(topic.replace(" ", "_"))
@@ -92,6 +125,61 @@ class MetaCognitiveCore:
         return None
 
     def run_cycle(self, user_input):
+        # Create conversation if needed
+        if not self.current_conversation:
+            self.current_conversation = self.feedback_store.create_conversation(
+                metadata={"device": "termux", "model": "qwen-1.5b"}
+            )
+            self.turn_counter = 0
+            self.logger.info(f"Started conversation {self.current_conversation.id[:8]}")
+
+        # Add user turn
+        user_turn = self.feedback_store.add_turn(
+            conversation_id=self.current_conversation.id,
+            role="user",
+            content=user_input,
+            turn_index=self.turn_counter
+        )
+        self.turn_counter += 1
+
+        # Get conversation history for feedback detection
+        recent_turns = self.feedback_store.get_turns(self.current_conversation.id)
+
+        # FEEDBACK DETECTION
+        feedback_detection = self.feedback_detector.detect_feedback(user_input, recent_turns)
+        if feedback_detection and feedback_detection.is_feedback:
+            self.logger.info(f"Feedback detected: types={feedback_detection.feedback_types}, "
+                            f"severity={feedback_detection.severity}")
+
+            # Save feedback
+            event, extraction = self.feedback_store.save_feedback(
+                conversation_id=self.current_conversation.id,
+                target_turn_id=feedback_detection.target_turn_id,
+                raw_text=user_input,
+                feedback_types=feedback_detection.feedback_types,
+                severity=feedback_detection.severity,
+                corrected_facts=feedback_detection.corrected_facts,
+                preferred_tools=feedback_detection.preferred_tools,
+                style_prefs=feedback_detection.style_prefs,
+                time_sensitivity_notes=feedback_detection.time_sensitivity_notes
+            )
+
+            self.logger.info(f"Saved feedback event {event.id[:8]}")
+
+        # GET RELEVANT FEEDBACK FOR CONTEXT
+        relevant_feedback = get_relevant_feedback(
+            conversation_id=self.current_conversation.id,
+            current_query=user_input,
+            feedback_store=self.feedback_store,
+            max_results=5
+        )
+
+        feedback_context = build_feedback_context_snippet(relevant_feedback, max_length=500)
+
+        if feedback_context:
+            self.logger.info(f"Injecting feedback context ({len(relevant_feedback)} items)")
+
+        # Parse intent and get logic output
         intent = self.llm.parse_intent(user_input)
         context = self.memory.get_context()
         logic_output = self.hrm.process(intent, context)
@@ -99,7 +187,14 @@ class MetaCognitiveCore:
         action = logic_output.get("action")
         time_sensitive = logic_output.get("time_sensitive", False)
         temporal_info = logic_output.get("temporal_info", {})
+        domain = logic_output.get("domain")  # For tool recommendations
         final_response = ""
+
+        # Tool recommendation from learning
+        if domain:
+            tool_recommendations = self.tool_learning.get_tool_recommendation(user_input, domain)
+            if tool_recommendations:
+                self.logger.info(f"Tool recommendations for {domain}: {tool_recommendations}")
 
         # Log temporal query handling
         if time_sensitive:
@@ -123,22 +218,74 @@ class MetaCognitiveCore:
 
         elif action == "PRICE_QUERY":
             asset = logic_output.get("asset", "").strip()
+            self.logger.info(f"[PRICE_QUERY] Fetching price for: {asset}")
+
             price_data = self.price_service.get_price(asset)
+
             if not price_data:
-                final_response = "I could not fetch a reliable live price for {} right now.".format(asset)
+                self.logger.warning(f"[PRICE_QUERY] Failed to fetch price for: {asset}")
+                final_response = "I could not fetch a reliable live price for '{}' right now. This might be due to: (1) the asset name/ticker being unrecognized, (2) the API being temporarily unavailable, or (3) a network issue. Please try again or verify the asset name.".format(asset)
             else:
-                summary = "As of {} {} UTC, the price of {} is approximately {} US dollars.".format(
-                    price_data["as_of_date"],
-                    price_data["as_of_time"],
-                    asset,
-                    price_data["price_usd"],
-                )
+                asset_type = price_data.get("asset_type", "asset")
+                source = price_data.get("source", "market data")
+
+                # Build detailed summary
+                if asset_type == "stock":
+                    ticker = price_data.get("asset_id", asset)
+                    price = price_data["price_usd"]
+                    currency = price_data.get("currency", "USD")
+                    change = price_data.get("change")
+                    change_pct = price_data.get("change_percent")
+
+                    summary = "As of {} {} UTC, {} (ticker: {}) is trading at {} {:.2f}".format(
+                        price_data["as_of_date"],
+                        price_data["as_of_time"],
+                        asset,
+                        ticker,
+                        currency,
+                        price
+                    )
+
+                    if change is not None and change_pct is not None:
+                        summary += ", {}{:.2f} ({}{:.2f}%) from previous close".format(
+                            "+" if change >= 0 else "",
+                            change,
+                            "+" if change_pct >= 0 else "",
+                            change_pct
+                        )
+
+                    summary += " (source: {})".format(source)
+
+                else:  # crypto
+                    price = price_data["price_usd"]
+                    change_24h = price_data.get("change_24h_percent")
+
+                    summary = "As of {} {} UTC, {} is trading at USD ${:.2f}".format(
+                        price_data["as_of_date"],
+                        price_data["as_of_time"],
+                        asset,
+                        price
+                    )
+
+                    if change_24h is not None:
+                        summary += ", {}{:.2f}% change in 24h".format(
+                            "+" if change_24h >= 0 else "",
+                            change_24h
+                        )
+
+                    summary += " (source: {})".format(source)
+
+                self.logger.info(f"[PRICE_QUERY] Success: {ticker if asset_type == 'stock' else asset} = {price}")
+
+                # Inject feedback context into temporal hint
+                system_instruction_with_feedback = feedback_context + get_temporal_system_hint() if time_sensitive else feedback_context
+
                 # Add temporal hint for time-sensitive queries
                 rewritten = self.llm.rewrite_from_sources(
                     question="current price of " + asset,
                     raw_summary=summary,
-                    source_label="live_price",
-                    temporal_hint=get_temporal_system_hint() if time_sensitive else None
+                    source_label=source,
+                    temporal_hint=system_instruction_with_feedback if system_instruction_with_feedback else (get_temporal_system_hint() if time_sensitive else None)
                 )
                 final_response = rewritten
 
@@ -163,12 +310,15 @@ class MetaCognitiveCore:
                     weather["temperature_f"],
                     weather["windspeed_mph"],
                 )
+                # Inject feedback context into temporal hint
+                system_instruction_with_feedback = feedback_context + get_temporal_system_hint() if time_sensitive else feedback_context
+
                 # Add temporal hint for time-sensitive queries
                 rewritten = self.llm.rewrite_from_sources(
                     question="current weather",
                     raw_summary=summary,
                     source_label="live_weather",
-                    temporal_hint=get_temporal_system_hint() if time_sensitive else None
+                    temporal_hint=system_instruction_with_feedback if system_instruction_with_feedback else (get_temporal_system_hint() if time_sensitive else None)
                 )
                 final_response = rewritten
 
@@ -221,10 +371,31 @@ class MetaCognitiveCore:
 
         elif action == "TRIGGER_SCOUT":
             topic = logic_output["topic"]
-            print("[Meta-Core] Unknown topic '{}', launching Scout...".format(topic))
+            domain = logic_output.get("domain")  # Get domain hint from HRM (e.g., "sports")
+            query_type = logic_output.get("query_type")  # Get query type (e.g., "sports_roster")
+
+            if domain:
+                print("[Meta-Core] {} query for '{}' (type: {}), launching Scout...".format(
+                    domain.upper(), topic, query_type or "general"))
+            else:
+                print("[Meta-Core] Unknown topic '{}', launching Scout...".format(topic))
+
             policy = self._select_policy_for_query(topic)
             # For time-sensitive queries, skip cache and fetch fresh data
-            scout_result = self.scout.search(topic, policy=policy, ignore_cache=time_sensitive)
+            # Pass domain hint to enable sports fast path and other domain-specific routing
+            scout_result = self.scout.search(topic, policy=policy, ignore_cache=time_sensitive, domain=domain)
+
+            # Log tool use event for scout search
+            self.feedback_store.add_tool_use_event(
+                conversation_id=self.current_conversation.id,
+                turn_id=user_turn.id,
+                tool_name="scout_search",
+                inputs={"topic": topic, "domain": domain, "query_type": query_type, "ignore_cache": time_sensitive},
+                output_summary=scout_result.get("summary", "")[:200],
+                success=scout_result["status"] == "FOUND",
+                error=None if scout_result["status"] == "FOUND" else "NOT_FOUND"
+            )
+
             if scout_result["status"] == "FOUND":
                 key = "knowledge_{}".format(topic.replace(" ", "_"))
                 metadata = {
@@ -234,12 +405,16 @@ class MetaCognitiveCore:
                 }
                 if hasattr(self.memory, "add_semantic"):
                     self.memory.add_semantic(key, scout_result["summary"], metadata)
+
+                # Inject feedback context into temporal hint
+                system_instruction_with_feedback = feedback_context + get_temporal_system_hint() if time_sensitive else feedback_context
+
                 # Add temporal hint for time-sensitive queries
                 rewritten = self.llm.rewrite_from_sources(
                     question=topic,
                     raw_summary=scout_result["summary"],
                     source_label=scout_result["source"],
-                    temporal_hint=get_temporal_system_hint() if time_sensitive else None
+                    temporal_hint=system_instruction_with_feedback if system_instruction_with_feedback else (get_temporal_system_hint() if time_sensitive else None)
                 )
                 final_response = rewritten
                 self.last_topic = topic
@@ -326,6 +501,16 @@ class MetaCognitiveCore:
             else:
                 final_response = self.llm.generate(user_input)
 
+        # Add assistant turn to feedback store
+        assistant_turn = self.feedback_store.add_turn(
+            conversation_id=self.current_conversation.id,
+            role="assistant",
+            content=final_response,
+            turn_index=self.turn_counter
+        )
+        self.turn_counter += 1
+
+        # Add to episodic memory
         self.memory.add_episodic(user_input, final_response)
         return final_response
 

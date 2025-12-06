@@ -8,7 +8,7 @@ Uses pattern matching and heuristics (no external ML needed).
 import re
 from typing import Optional, List, Dict, Any
 from dataclasses import dataclass
-from feedback_store import FeedbackType, Severity, Turn
+from components.feedback_store import FeedbackType, Severity, Turn
 
 
 @dataclass
@@ -83,15 +83,18 @@ class FeedbackDetector:
 
     # Tool name patterns
     TOOL_PATTERNS = {
-        "scout_search": [r"(scout|knowledge scout|search)"],
+        "scout_search": [r"(scout|knowledge scout)", r"(do|run|use)\s+(a |an |the )?(web|internet|online)\s+search"],
         "price_query": [r"(price|pricing|cost|value)\s+(service|api|query|tool|check)"],
         "weather_current": [r"(weather|temperature|forecast)\s+(service|api|check)"],
-        "espn": [r"(espn|sports api|game scores?)"],
+        "espn": [r"(espn|sports api|game scores?|sports (news|search|data))"],
+        "thesportsdb": [r"(thesportsdb|sports database|sports api)"],
+        "sports_search": [r"(sports (search|lookup|query|check)|check sports|look up sports)"],
+        "reddit_sports": [r"(reddit|r/sports|r/nfl|r/nba)"],
         "wikipedia": [r"(wikipedia|wiki)"],
         "web_search": [r"(web search|google|internet search|online search)"],
         "arxiv": [r"(arxiv|academic papers?)"],
         "github": [r"(github|repositories|repos)"],
-    ]
+    }
 
     # Time sensitivity patterns
     TIME_SENSITIVITY_PATTERNS = [

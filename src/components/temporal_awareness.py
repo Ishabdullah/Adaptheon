@@ -33,16 +33,39 @@ TEMPORAL_KEYWORDS = [
 # Always-temporal domains (inherently time-sensitive)
 # NOTE: These should be combined with context - not standalone
 ALWAYS_TEMPORAL_DOMAINS = [
-    'price', 'stock', 'crypto',
-    'weather', 'temperature', 'forecast',
-    'score', 'game', 'match', 'playing',
-    'news', 'breaking',
+    # Finance & Markets
+    'price', 'stock', 'crypto', 'cryptocurrency',
+    'market', 'trading', 'shares', 'nasdaq', 'dow',
+    'bitcoin', 'ethereum', 'coin',
+
+    # Weather
+    'weather', 'temperature', 'forecast', 'climate',
+
+    # Sports
+    'score', 'game', 'match', 'playing', 'won', 'lost',
+    'quarterback', 'pitcher', 'coach',
+
+    # News & Current Events
+    'news', 'breaking', 'headline', 'latest news',
+    'breaking news', 'top news',
+
+    # Books & Bestsellers
+    'bestseller', 'best seller', 'nyt #', 'top book',
 ]
 
 # Context-dependent temporal terms (only temporal with keywords like "current", "now")
+# These become temporal when combined with "who is", "what is current", etc.
 CONTEXT_TEMPORAL_TERMS = [
-    'bitcoin', 'ethereum',
+    # Political positions (temporal when asking "who is the current...")
     'election', 'president', 'governor', 'prime minister',
+    'senator', 'mayor', 'ceo', 'chairman',
+
+    # Sports positions (temporal when asking "who is the...")
+    'quarterback', 'qb', 'pitcher', 'coach', 'manager',
+    'captain', 'mvp',
+
+    # Crypto/Finance (temporal when not asking historical questions)
+    'bitcoin price', 'ethereum price', 'stock price',
 ]
 
 def is_after_cutoff(target_date: date) -> bool:
@@ -118,6 +141,30 @@ def contains_temporal_domain(text: str) -> bool:
     text_lower = text.lower()
     return any(domain in text_lower for domain in ALWAYS_TEMPORAL_DOMAINS)
 
+def contains_identity_question(text: str) -> bool:
+    """
+    Check if text contains identity/status questions that are inherently temporal.
+
+    Examples:
+    - "Who is the current president?"
+    - "What is the stock price of Amazon?"
+    - "Who is the quarterback for the Giants?"
+    """
+    text_lower = text.lower()
+
+    # Identity question patterns
+    identity_patterns = [
+        'who is the', 'who\'s the', 'who are the',
+        'what is the current', 'what\'s the current',
+        'who is currently', 'who are currently',
+    ]
+
+    # Check if query contains identity pattern + context-temporal term
+    has_identity_pattern = any(pattern in text_lower for pattern in identity_patterns)
+    has_context_term = any(term in text_lower for term in CONTEXT_TEMPORAL_TERMS)
+
+    return has_identity_pattern and has_context_term
+
 def detect_temporal_intent(text: str) -> dict:
     """
     Analyze text for temporal intent and extract time information
@@ -135,6 +182,7 @@ def detect_temporal_intent(text: str) -> dict:
 
     has_keywords = contains_temporal_keywords(text)
     has_domain = contains_temporal_domain(text)
+    has_identity_question = contains_identity_question(text)
     extracted_years = extract_years_from_text(text)
     extracted_dates = extract_dates_from_text(text)
     resolved_date = resolve_relative_time(text)
@@ -143,6 +191,12 @@ def detect_temporal_intent(text: str) -> dict:
     is_temporal = False
     is_after_cutoff_flag = False
     reasons = []
+
+    # Check 0: Identity/status questions (always time-sensitive)
+    if has_identity_question:
+        is_temporal = True
+        is_after_cutoff_flag = True  # Identity questions require current data
+        reasons.append("identity/status question (who is the...)")
 
     # Check 1: Temporal keywords
     if has_keywords:
@@ -189,6 +243,7 @@ def detect_temporal_intent(text: str) -> dict:
         'is_temporal': is_temporal,
         'has_keywords': has_keywords,
         'has_domain': has_domain,
+        'has_identity_question': has_identity_question,
         'extracted_years': extracted_years,
         'extracted_dates': extracted_dates,
         'resolved_date': resolved_date,
